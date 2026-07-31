@@ -1,0 +1,17 @@
+[package]
+name = "game-utils"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Bevy-agnostic game utility library (math, save, i18n) extracted from the my-ecosystem-bevy template"
+repository = { workspace = true }
+keywords = ["game", "gamedev", "utility", "save", "i18n"]
+categories = ["game-development"]
+
+[dependencies]
+glam.workspace = true
+serde.workspace = true
+ron.workspace = true
+directories.workspace = true
+unic-langid.workspace = true
+fluent-bundle.workspace = true

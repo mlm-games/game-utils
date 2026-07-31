@@ -1,0 +1,19 @@
+[package]
+name = "game-utils-bevy"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Bevy game-feel utilities (juice, screen effects, transitions, vfx, audio) extracted from the my-ecosystem-bevy template"
+repository = { workspace = true }
+keywords = ["bevy", "gamedev", "game-feel", "juice", "vfx"]
+categories = ["game-development"]
+publish = false
+
+[dependencies]
+game-utils.workspace = true
+bevy.workspace = true
+rand.workspace = true
+serde.workspace = true
+
+[lints.clippy]
+type_complexity = "allow"
