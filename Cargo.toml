@@ -3,7 +3,7 @@ members = ["crates/*"]
 resolver = "3"
 
 [workspace.package]
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/mlm-games/game-utils"
@@ -32,4 +32,4 @@ bevy = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ff
     "bevy_ui",
     "reflect_auto_register",
 ] }
-game-utils = { path = "crates/game-utils", version = "0.1.1" }
+game-utils = { path = "crates/game-utils", version = "0.1.2" }
