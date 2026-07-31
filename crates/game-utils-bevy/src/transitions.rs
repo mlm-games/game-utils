@@ -97,8 +97,10 @@ impl<S: FreelyMutableState> Default for TransitionsPlugin<S> {
 
 impl<S: FreelyMutableState> Plugin for TransitionsPlugin<S> {
     fn build(&self, app: &mut App) {
-        app.init_resource::<Transition<S>>()
-            .add_systems(Update, tick_transition::<S>);
+        app.init_resource::<Transition<S>>().add_systems(
+            Update,
+            (tick_transition::<S>, clear_blocked_inputs::<S>).chain(),
+        );
     }
 }
 
@@ -162,4 +164,18 @@ fn update_visuals<S: FreelyMutableState>(tr: &mut Transition<S>, t: f32, coverin
 
 pub fn input_blocked<S: FreelyMutableState>(tr: Res<Transition<S>>) -> bool {
     tr.block_input
+}
+
+/// Clears queued key/mouse presses while a transition blocks input, so a press
+/// during the wipe/fade can't leak into the new state.
+fn clear_blocked_inputs<S: FreelyMutableState>(
+    tr: Res<Transition<S>>,
+    mut keys: ResMut<ButtonInput<KeyCode>>,
+    mut mouse: ResMut<ButtonInput<MouseButton>>,
+) {
+    if !tr.block_input {
+        return;
+    }
+    keys.reset_all();
+    mouse.reset_all();
 }

@@ -3,6 +3,7 @@ pub mod center_pivot;
 pub mod game_feel;
 pub mod i18n;
 pub mod juice;
+pub mod pooling;
 pub mod post_process;
 pub mod save;
 pub mod screen_effects;
