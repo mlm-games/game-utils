@@ -27,6 +27,7 @@ pub struct ScreenEffectSettings {
     pub chromatic_intensity: f32,
     pub flash_amount: f32,
     pub circle_wipe_progress: f32,
+    pub _padding: f32,
 }
 
 #[derive(Resource)]
