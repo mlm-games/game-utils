@@ -19,15 +19,26 @@ use bevy::{
 };
 
 use crate::screen_effects::{ChromaticAberration, FlashWhite};
-use crate::transitions::Transition;
+use crate::transitions::{CircleWipeDirection, Transition, TransitionKind};
 
-#[derive(Component, Default, Clone, Copy, ExtractComponent, ShaderType)]
+#[derive(Component, Clone, Copy, ExtractComponent, ShaderType)]
 #[extract_app(RenderApp)]
 pub struct ScreenEffectSettings {
     pub chromatic_intensity: f32,
     pub flash_amount: f32,
     pub circle_wipe_progress: f32,
-    pub _padding: f32,
+    pub circle_wipe_direction: f32,
+}
+
+impl Default for ScreenEffectSettings {
+    fn default() -> Self {
+        Self {
+            chromatic_intensity: 0.0,
+            flash_amount: 0.0,
+            circle_wipe_progress: 0.0,
+            circle_wipe_direction: 1.0,
+        }
+    }
 }
 
 #[derive(Resource)]
@@ -182,5 +193,10 @@ pub fn sync_post_process_settings<S: FreelyMutableState>(
         s.chromatic_intensity = chroma.0;
         s.flash_amount = flash.amount;
         s.circle_wipe_progress = transition.circle_progress;
+        s.circle_wipe_direction = match transition.kind {
+            TransitionKind::CircleWipe(CircleWipeDirection::Expand) => 1.0,
+            TransitionKind::CircleWipe(CircleWipeDirection::Contract) => -1.0,
+            TransitionKind::Fade => 1.0,
+        };
     }
 }

@@ -3,10 +3,19 @@ use bevy::state::state::FreelyMutableState;
 use std::marker::PhantomData;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum CircleWipeDirection {
+    /// The black circle grows from the center outwards to cover the scene.
+    #[default]
+    Expand,
+    /// The black circle shrinks from the edges towards the center to cover the scene.
+    Contract,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum TransitionKind {
     #[default]
     Fade,
-    CircleWipe,
+    CircleWipe(CircleWipeDirection),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
@@ -67,7 +76,7 @@ impl<S: FreelyMutableState> Transition<S> {
     }
 
     pub fn circle_wipe_progress(&self) -> f32 {
-        if self.kind == TransitionKind::CircleWipe {
+        if matches!(self.kind, TransitionKind::CircleWipe(_)) {
             match self.phase {
                 TransitionPhase::Covering => self.progress,
                 TransitionPhase::Uncovering => 1.0 - self.progress,
@@ -151,8 +160,12 @@ fn update_visuals<S: FreelyMutableState>(tr: &mut Transition<S>, t: f32, coverin
             tr.overlay_alpha = if covering { t } else { 1.0 - t };
             tr.circle_progress = 0.0;
         }
-        TransitionKind::CircleWipe => {
-            tr.circle_progress = if covering { t } else { 1.0 - t };
+        TransitionKind::CircleWipe(dir) => {
+            let radius = match dir {
+                CircleWipeDirection::Expand => t,
+                CircleWipeDirection::Contract => 1.0 - t,
+            };
+            tr.circle_progress = if covering { radius } else { 1.0 - radius };
             tr.overlay_alpha = if covering {
                 (t * 1.2).min(1.0)
             } else {

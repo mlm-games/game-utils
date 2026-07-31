@@ -4,9 +4,7 @@ struct ScreenEffectSettings {
     chromatic_intensity: f32,
     flash_amount: f32,
     circle_wipe_progress: f32,
-#ifdef SIXTEEN_BYTE_ALIGNMENT
-    _webgl2_padding: f32,
-#endif
+    circle_wipe_direction: f32,
 }
 
 @group(0) @binding(0) var screen_texture: texture_2d<f32>;
@@ -35,9 +33,9 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     // Circle wipe transition
     if settings.circle_wipe_progress > 0.0 {
         let center = vec2<f32>(0.5, 0.5);
-        let dist = distance(in.uv, center);
         let radius = sqrt(0.5) * settings.circle_wipe_progress;
-        if dist > radius {
+        let inside = distance(in.uv, center) <= radius;
+        if (settings.circle_wipe_direction > 0.0) == inside {
             color = vec4<f32>(0.0, 0.0, 0.0, 1.0);
         }
     }
