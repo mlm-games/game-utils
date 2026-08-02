@@ -37,6 +37,32 @@ impl Default for FreezeFrame {
 #[derive(Resource, Default)]
 pub struct ChromaticAberration(pub f32);
 
+/// Feel tuning for the trauma shake and chromatic decay systems. Mirrors the Godot
+/// template's `shake_camera(camera, strength, duration)`/`camera_shake(intensity,
+/// duration, decay)` params: consumers override the resource once to pick their feel.
+#[derive(Resource)]
+pub struct ScreenEffectsConfig {
+    pub shake_magnitude_2d: f32,
+    pub shake_magnitude_3d: f32,
+    pub rotation_jitter_2d: f32,
+    pub rotation_jitter_3d: f32,
+    pub trauma_decay: f32,
+    pub chromatic_decay: f32,
+}
+
+impl Default for ScreenEffectsConfig {
+    fn default() -> Self {
+        Self {
+            shake_magnitude_2d: 12.0,
+            shake_magnitude_3d: 0.35,
+            rotation_jitter_2d: 0.05,
+            rotation_jitter_3d: 0.02,
+            trauma_decay: 1.5,
+            chromatic_decay: 2.0,
+        }
+    }
+}
+
 #[derive(Component, Clone, Copy)]
 pub struct CameraBase {
     pub translation: Vec3,
@@ -78,6 +104,7 @@ impl Plugin for ScreenEffectsPlugin {
             .init_resource::<FlashWhite>()
             .init_resource::<FreezeFrame>()
             .init_resource::<ChromaticAberration>()
+            .init_resource::<ScreenEffectsConfig>()
             .add_systems(
                 Update,
                 (apply_trauma_shake, tick_flash, tick_freeze, tick_chromatic).chain(),
@@ -85,12 +112,17 @@ impl Plugin for ScreenEffectsPlugin {
     }
 }
 
-fn tick_chromatic(time: Res<Time>, mut chrom: ResMut<ChromaticAberration>) {
-    chrom.0 = (chrom.0 - 2.0 * time.delta_secs()).max(0.0);
+fn tick_chromatic(
+    time: Res<Time>,
+    cfg: Res<ScreenEffectsConfig>,
+    mut chrom: ResMut<ChromaticAberration>,
+) {
+    chrom.0 = (chrom.0 - cfg.chromatic_decay * time.delta_secs()).max(0.0);
 }
 
 fn apply_trauma_shake(
     time: Res<Time>,
+    cfg: Res<ScreenEffectsConfig>,
     mut trauma: ResMut<Trauma>,
     mut q2: Query<(&mut Transform, &CameraBase), (With<Camera2d>, Without<Camera3d>)>,
     mut q3: Query<(&mut Transform, &CameraBase3d), (With<Camera3d>, Without<Camera2d>)>,
@@ -100,10 +132,10 @@ fn apply_trauma_shake(
     let shake_pow = t * t;
     for (mut tf, base) in &mut q2 {
         if shake_pow > 0.001 {
-            let mag = shake_pow * 12.0;
+            let mag = shake_pow * cfg.shake_magnitude_2d;
             let ox = rng.random_range(-mag..mag);
             let oy = rng.random_range(-mag..mag);
-            let rot = rng.random_range(-0.05..0.05) * shake_pow;
+            let rot = rng.random_range(-cfg.rotation_jitter_2d..cfg.rotation_jitter_2d) * shake_pow;
             tf.translation = base.translation + Vec3::new(ox, oy, 0.0);
             tf.rotation = Quat::from_rotation_z(base.rotation + rot);
         } else {
@@ -113,11 +145,11 @@ fn apply_trauma_shake(
     }
     for (mut tf, base) in &mut q3 {
         if shake_pow > 0.001 {
-            let mag = shake_pow * 0.35;
+            let mag = shake_pow * cfg.shake_magnitude_3d;
             let ox = rng.random_range(-mag..mag);
             let oy = rng.random_range(-mag..mag);
             let oz = rng.random_range(-mag..mag);
-            let rot_j = rng.random_range(-0.02..0.02) * shake_pow;
+            let rot_j = rng.random_range(-cfg.rotation_jitter_3d..cfg.rotation_jitter_3d) * shake_pow;
             tf.translation = base.translation + Vec3::new(ox, oy, oz);
             tf.rotation = base.rotation * Quat::from_rotation_z(rot_j);
         } else {
@@ -125,7 +157,7 @@ fn apply_trauma_shake(
             tf.rotation = base.rotation;
         }
     }
-    trauma.0 = (trauma.0 - 1.5 * time.delta_secs()).max(0.0);
+    trauma.0 = (trauma.0 - cfg.trauma_decay * time.delta_secs()).max(0.0);
 }
 
 fn tick_flash(real: Res<Time<Real>>, mut flash: ResMut<FlashWhite>) {

@@ -28,10 +28,16 @@ impl Default for SlowMotion {
 pub struct GameFeel;
 
 impl GameFeel {
-    pub fn add_recoil(commands: &mut Commands, entity: Entity, dir: Vec2, strength: f32) {
+    pub fn add_recoil(
+        commands: &mut Commands,
+        entity: Entity,
+        dir: Vec2,
+        strength: f32,
+        duration: f32,
+    ) {
         commands.entity(entity).insert(Recoil {
             offset: dir.normalize_or_zero() * strength,
-            timer: Timer::from_seconds(0.2, TimerMode::Once),
+            timer: Timer::from_seconds(duration, TimerMode::Once),
             original: None,
         });
     }

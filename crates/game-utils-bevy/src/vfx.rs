@@ -7,6 +7,30 @@ use crate::juice::Particle;
 pub struct DamageNumber {
     pub timer: Timer,
     pub velocity: Vec2,
+    pub gravity: f32,
+}
+
+/// Feel tuning for [`VfxSpawner::spawn_damage_number_cfg`]. Mirrors the Godot
+/// template's approach of exposing tuneables as defaults the consumer can override.
+#[derive(Clone, Copy)]
+pub struct DamageNumberConfig {
+    pub lifetime: f32,
+    pub spread: f32,
+    pub rise_speed: f32,
+    pub gravity: f32,
+    pub font_size: f32,
+}
+
+impl Default for DamageNumberConfig {
+    fn default() -> Self {
+        Self {
+            lifetime: 1.0,
+            spread: 20.0,
+            rise_speed: 80.0,
+            gravity: 120.0,
+            font_size: 28.0,
+        }
+    }
 }
 
 #[derive(Component)]
@@ -25,18 +49,32 @@ pub struct VfxSpawner;
 
 impl VfxSpawner {
     pub fn spawn_damage_number(commands: &mut Commands, amount: i32, pos: Vec2, color: Color) {
+        Self::spawn_damage_number_cfg(commands, amount, pos, color, DamageNumberConfig::default());
+    }
+
+    pub fn spawn_damage_number_cfg(
+        commands: &mut Commands,
+        amount: i32,
+        pos: Vec2,
+        color: Color,
+        cfg: DamageNumberConfig,
+    ) {
         commands.spawn((
             Text2d::new(amount.to_string()),
             TextFont {
-                font_size: FontSize::Px(28.0),
+                font_size: FontSize::Px(cfg.font_size),
                 ..default()
             },
             TextColor(color),
             TextLayout::default(),
             Transform::from_translation(pos.extend(50.0)),
             DamageNumber {
-                timer: Timer::from_seconds(1.0, TimerMode::Once),
-                velocity: Vec2::new(rand::rng().random_range(-20.0..20.0), 80.0),
+                timer: Timer::from_seconds(cfg.lifetime, TimerMode::Once),
+                velocity: Vec2::new(
+                    rand::rng().random_range(-cfg.spread..cfg.spread),
+                    cfg.rise_speed,
+                ),
+                gravity: cfg.gravity,
             },
         ));
     }
@@ -69,11 +107,16 @@ impl VfxSpawner {
         }
     }
 
-    pub fn create_trail(commands: &mut Commands, entity: Entity, interval: f32) {
+    pub fn create_trail(
+        commands: &mut Commands,
+        entity: Entity,
+        interval: f32,
+        ghost_lifetime: f32,
+    ) {
         commands.entity(entity).insert(TrailEmitter {
             timer: Timer::from_seconds(interval, TimerMode::Repeating),
             interval,
-            ghost_lifetime: 0.4,
+            ghost_lifetime,
         });
     }
 }
@@ -96,7 +139,7 @@ fn animate_damage_numbers(
     for (e, mut tf, mut color, mut dn) in &mut q {
         dn.timer.tick(time.delta());
         tf.translation += (dn.velocity * time.delta_secs()).extend(0.0);
-        dn.velocity.y -= 120.0 * time.delta_secs();
+        dn.velocity.y -= dn.gravity * time.delta_secs();
         let a = (1.0 - dn.timer.fraction()).clamp(0.0, 1.0);
         color.0.set_alpha(a);
         if dn.timer.just_finished() {
