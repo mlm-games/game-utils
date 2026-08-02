@@ -38,6 +38,10 @@ pub struct Transition<S: FreelyMutableState> {
     pub overlay_alpha: f32,
     pub circle_progress: f32,
     pub block_input: bool,
+    /// Kind used by `begin_to_state` unless the consumer overrides it. Defaults to
+    /// [`TransitionKind::Fade`]; set it once (e.g. at startup) to pick a house style,
+    /// and `begin_to_state_with` still overrides per transition.
+    pub default_kind: TransitionKind,
 }
 
 impl<S: FreelyMutableState> Default for Transition<S> {
@@ -52,6 +56,7 @@ impl<S: FreelyMutableState> Default for Transition<S> {
             overlay_alpha: 0.0,
             circle_progress: 0.0,
             block_input: false,
+            default_kind: TransitionKind::Fade,
         }
     }
 }
@@ -62,7 +67,7 @@ impl<S: FreelyMutableState> Transition<S> {
         self.phase = TransitionPhase::Covering;
         self.progress = 0.0;
         self.pending_state = Some(next);
-        self.kind = TransitionKind::Fade;
+        self.kind = self.default_kind;
         self.block_input = true;
     }
 
