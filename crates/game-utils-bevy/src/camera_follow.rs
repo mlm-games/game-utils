@@ -82,19 +82,19 @@ fn camera_follow_system(
 ) {
     let dt = time.delta_secs();
     for (mut tf, mut follow, mut projection, base) in &mut q {
-        if let Some(target) = follow.target {
-            if let Ok(gt) = targets.get(target) {
-                let target_pos = gt.translation().truncate();
-                let desired_aim = follow.aim_point.unwrap_or(target_pos);
-                follow.smooth_aim = follow
-                    .smooth_aim
-                    .lerp(desired_aim, framed_lerp(follow.aim_weight, dt));
-                let center = target_pos.lerp(follow.smooth_aim, framed_lerp(follow.aim_pull, dt));
-                tf.translation = center.extend(tf.translation.z);
-                if let Some(mut base) = base {
-                    base.translation = tf.translation;
-                    base.rotation = 0.0;
-                }
+        if let Some(target) = follow.target
+            && let Ok(gt) = targets.get(target)
+        {
+            let target_pos = gt.translation().truncate();
+            let desired_aim = follow.aim_point.unwrap_or(target_pos);
+            follow.smooth_aim = follow
+                .smooth_aim
+                .lerp(desired_aim, framed_lerp(follow.aim_weight, dt));
+            let center = target_pos.lerp(follow.smooth_aim, framed_lerp(follow.aim_pull, dt));
+            tf.translation = center.extend(tf.translation.z);
+            if let Some(mut base) = base {
+                base.translation = tf.translation;
+                base.rotation = 0.0;
             }
         }
         if let Projection::Orthographic(ortho) = projection.as_mut() {

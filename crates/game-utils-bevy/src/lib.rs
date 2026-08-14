@@ -2,6 +2,7 @@ pub mod audio;
 pub mod camera_follow;
 pub mod center_pivot;
 pub mod game_feel;
+pub mod hit_flash;
 pub mod hitstop;
 pub mod i18n;
 pub mod juice;
@@ -57,6 +58,7 @@ impl<S: FreelyMutableState> Plugin for EcosystemPlugin<S> {
             center_pivot::CenterPivotPlugin,
             game_feel::GameFeelPlugin,
             self.i18n.clone(),
+            hit_flash::HitFlashPlugin,
             hitstop::HitStopPlugin,
             juice::JuicePlugin,
             post_process::ScreenEffectsPostProcessPlugin,

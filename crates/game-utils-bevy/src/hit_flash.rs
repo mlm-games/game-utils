@@ -1,7 +1,9 @@
-//! Per-entity hit flash driven on `Sprite.color`. Influcenced by another game
+//! Per-entity hit flash driven on `Sprite.color`. Ported from Pathogenic's
+//! player-damage flash: the sprite tints toward a flash color, then eases back
+//! to its original color. Add via [`HitFlash::apply`]; the system removes the
+//! component when the flash finishes.
 
 use bevy::prelude::*;
-use repose_core::animation::Easing;
 
 #[derive(Component)]
 pub struct HitFlash {
@@ -56,7 +58,8 @@ fn tick_hit_flash(
         }
         hf.timer.tick(time.delta());
         let t = hf.timer.fraction().clamp(0.0, 1.0);
-        let strength = hf.value * Easing::CubicIn.interpolate(1.0 - t);
+        // Cubic ease-out decay: full strength at t=0, falling to 0 at t=1.
+        let strength = hf.value * (1.0 - t).powi(3);
         let base = hf.original.unwrap_or(Color::WHITE);
         sprite.color = base.mix(&hf.color, strength);
         if hf.timer.just_finished() {
