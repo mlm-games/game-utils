@@ -149,7 +149,8 @@ fn apply_trauma_shake(
             let ox = rng.random_range(-mag..mag);
             let oy = rng.random_range(-mag..mag);
             let oz = rng.random_range(-mag..mag);
-            let rot_j = rng.random_range(-cfg.rotation_jitter_3d..cfg.rotation_jitter_3d) * shake_pow;
+            let rot_j =
+                rng.random_range(-cfg.rotation_jitter_3d..cfg.rotation_jitter_3d) * shake_pow;
             tf.translation = base.translation + Vec3::new(ox, oy, oz);
             tf.rotation = base.rotation * Quat::from_rotation_z(rot_j);
         } else {

@@ -6,8 +6,8 @@ The workspace is split into two crates so the generic pieces can be used without
 
 | Crate | Description |
 | --- | --- |
-| [`game-utils`](crates/game-utils/) | Bevy-agnostic: math helpers (`glam`), generic save manager (RON + platform data dir), i18n (Fluent) |
-| [`game-utils-bevy`](crates/game-utils-bevy/) | Bevy plugins: audio channels, game feel, juice, vfx, screen effects (2D + 3D), post-processing, transitions, UI effects, entity pooling |
+| [`game-utils`](crates/game-utils/) | Bevy-agnostic: math helpers (`glam`), generic save manager (RON + platform data dir), crash-safe save store (atomic temp+rename writes, `.bak` rotation, corruption quarantine), weighted random / stable sampling, stats aggregation + unlock conditions, achievement registry, i18n (Fluent) |
+| [`game-utils-bevy`](crates/game-utils-bevy/) | Bevy plugins: audio channels + pooled positional SFX with per-frame collapse + music fade, game feel, juice, vfx, screen effects (2D + 3D), post-processing, transitions, UI effects, entity pooling |
 
 ## game-utils (bevy-agnostic)
 

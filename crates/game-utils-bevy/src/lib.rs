@@ -11,7 +11,11 @@ pub mod transitions;
 pub mod ui_effects;
 pub mod vfx;
 
-pub use game_utils::{i18n as core_i18n, math_utils, save as core_save};
+pub use game_utils::{
+    achievements as core_achievements, i18n as core_i18n, math_utils, save as core_save,
+    save_store as core_save_store, stats as core_stats, unlock as core_unlock,
+    weighted as core_weighted,
+};
 
 use std::marker::PhantomData;
 

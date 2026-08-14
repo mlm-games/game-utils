@@ -1839,6 +1839,7 @@ dependencies = [
  "directories",
  "fluent-bundle",
  "glam",
+ "rand",
  "ron",
  "serde",
  "unic-langid",
