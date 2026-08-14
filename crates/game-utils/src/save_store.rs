@@ -30,6 +30,11 @@ pub struct SaveStore {
     /// When true, a target that fails `validate` is renamed aside (timestamped) instead
     /// of deleted, so corrupt saves stay on disk for support/manual recovery.
     pub quarantine_corrupt: bool,
+    /// Cheap integrity probe used when rotating an existing target: a target that fails
+    /// it is quarantined rather than rotated into `.bak`. Defaults to the JSON probe
+    /// ([`Self::is_intact_json`]); set it to match the serialization format (e.g. a RON
+    /// parse) so non-JSON stores aren't mistaken for corrupt on every write.
+    pub validate: fn(&[u8]) -> bool,
 }
 
 impl SaveStore {
@@ -39,7 +44,14 @@ impl SaveStore {
             file_name: file_name.into(),
             bak_min_age_secs: BAK_MIN_AGE_SECS,
             quarantine_corrupt: true,
+            validate: Self::is_intact_json,
         }
+    }
+
+    /// Override the integrity probe used when rotating an existing target on write.
+    pub fn with_validator(mut self, validate: fn(&[u8]) -> bool) -> Self {
+        self.validate = validate;
+        self
     }
 
     pub fn path(&self) -> PathBuf {
@@ -116,7 +128,7 @@ impl SaveStore {
 
         if target_path.exists() {
             let target_intact = Self::read_all(&target_path)
-                .map(|b| Self::is_intact_json(&b))
+                .map(|b| (self.validate)(&b))
                 .unwrap_or(false);
             if !target_intact {
                 self.quarantine_corrupt_file(&target_path);

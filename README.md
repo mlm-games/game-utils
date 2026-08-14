@@ -6,14 +6,17 @@ The workspace is split into two crates so the generic pieces can be used without
 
 | Crate | Description |
 | --- | --- |
-| [`game-utils`](crates/game-utils/) | Bevy-agnostic: math helpers (`glam`), generic save manager (RON + platform data dir), crash-safe save store (atomic temp+rename writes, `.bak` rotation, corruption quarantine), weighted random / stable sampling, stats aggregation + unlock conditions, achievement registry, i18n (Fluent) |
+| [`game-utils`](crates/game-utils/) | Bevy-agnostic: math helpers (`glam`), generic save manager (RON + platform data dir), crash-safe save store (atomic temp+rename writes, `.bak` rotation, corruption quarantine), weighted random / stable sampling, stats aggregation + unlock conditions, achievement registry, i18n (Fluent), multi-profile manager, discovery/codex ledger |
 | [`game-utils-bevy`](crates/game-utils-bevy/) | Bevy plugins: audio channels + pooled positional SFX with per-frame collapse + music fade, game feel, juice, vfx, screen effects (2D + 3D), post-processing, transitions, UI effects, entity pooling |
 
 ## game-utils (bevy-agnostic)
 
-- `math_utils` — `MathUtils` with `smooth_damp`, `approach`, `wave` (uses `glam` so the types are the same ones Bevy uses).
-- `save` — `SaveManager` persists any `Serialize` data to RON. Data types implement `Versioned` for version migration. Works without Bevy.
-- `i18n` — `LocaleResources` parses Fluent (`.ftl`) strings into a key/value map for the current locale.
+- `math_utils` - `MathUtils` with `smooth_damp`, `approach`, `wave` (uses `glam` so the types are the same ones Bevy uses).
+- `save` - `SaveManager` persists any `Serialize` data to RON. Data types implement `Versioned` for version migration. Works without Bevy.
+- `save_store` - `SaveStore`, a crash-safe file store (temp+rename writes, throttled `.bak` rotation, corruption quarantine + recovery).
+- `profiles` - `ProfileManager`, a genre-agnostic multi-profile manager: RON pointer config, per-profile directories, create/clear-with-archive/prune, live switch, and copy-only/verified/atomic legacy migration.
+- `codex` - `Codex`/`CodexStore`, a discovery ledger (discovered flag + best value + counter per string id) with optional crash-safe RON persistence.
+- `i18n` - `LocaleResources` parses Fluent (`.ftl`) strings into a key/value map for the current locale.
 
 ## game-utils-bevy
 

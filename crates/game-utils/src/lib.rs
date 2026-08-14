@@ -1,6 +1,8 @@
 pub mod achievements;
+pub mod codex;
 pub mod i18n;
 pub mod math_utils;
+pub mod profiles;
 pub mod save;
 pub mod save_store;
 pub mod stats;

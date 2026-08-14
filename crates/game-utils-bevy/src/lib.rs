@@ -12,9 +12,9 @@ pub mod ui_effects;
 pub mod vfx;
 
 pub use game_utils::{
-    achievements as core_achievements, i18n as core_i18n, math_utils, save as core_save,
-    save_store as core_save_store, stats as core_stats, unlock as core_unlock,
-    weighted as core_weighted,
+    achievements as core_achievements, codex as core_codex, i18n as core_i18n, math_utils,
+    profiles as core_profiles, save as core_save, save_store as core_save_store,
+    stats as core_stats, unlock as core_unlock, weighted as core_weighted,
 };
 
 use std::marker::PhantomData;
