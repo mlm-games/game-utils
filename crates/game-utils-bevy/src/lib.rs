@@ -1,6 +1,8 @@
 pub mod audio;
+pub mod camera_follow;
 pub mod center_pivot;
 pub mod game_feel;
+pub mod hitstop;
 pub mod i18n;
 pub mod juice;
 pub mod pooling;
@@ -51,9 +53,11 @@ impl<S: FreelyMutableState> Plugin for EcosystemPlugin<S> {
     fn build(&self, app: &mut App) {
         app.add_plugins((
             audio::AudioPlugin,
+            camera_follow::CameraFollowPlugin,
             center_pivot::CenterPivotPlugin,
             game_feel::GameFeelPlugin,
             self.i18n.clone(),
+            hitstop::HitStopPlugin,
             juice::JuicePlugin,
             post_process::ScreenEffectsPostProcessPlugin,
             screen_effects::ScreenEffectsPlugin,

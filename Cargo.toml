@@ -33,3 +33,4 @@ bevy = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ff
     "reflect_auto_register",
 ] }
 game-utils = { path = "crates/game-utils", version = "0.1.2" }
+repose-core = "0.27"
