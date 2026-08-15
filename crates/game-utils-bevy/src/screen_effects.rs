@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use rand::RngExt;
 
+use crate::time_scale::TimeScaleControl;
+
 #[derive(Resource, Default)]
 pub struct Trauma(pub f32);
 
@@ -307,15 +309,16 @@ fn tick_flash(real: Res<Time<Real>>, mut flash: ResMut<FlashWhite>) {
 fn tick_freeze(
     real: Res<Time<Real>>,
     mut freeze: ResMut<FreezeFrame>,
-    mut virtual_time: ResMut<Time<Virtual>>,
+    mut ctrl: ResMut<TimeScaleControl>,
 ) {
     if !freeze.active {
+        ctrl.freeze_active = false;
         return;
     }
-    virtual_time.pause();
+    ctrl.freeze_active = true;
     freeze.timer.tick(real.delta());
     if freeze.timer.just_finished() {
         freeze.active = false;
-        virtual_time.unpause();
+        ctrl.freeze_active = false;
     }
 }

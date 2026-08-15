@@ -59,10 +59,10 @@ impl ObjectPool {
         spawn: impl FnOnce(&mut EntityCommands),
     ) -> Option<Entity> {
         if let Some(e) = pool.available.pop_front() {
+            // Reused entity keeps its existing state (including the marker `M`); only
+            // visibility flips. State reset is the caller's job via a per-pool reset.
             pool.active.push(e);
-            commands
-                .entity(e)
-                .insert((Visibility::Visible, M::default()));
+            commands.entity(e).insert(Visibility::Visible);
             return Some(e);
         }
         if pool.active.len() >= pool.max_size {
@@ -82,10 +82,9 @@ impl ObjectPool {
     ) {
         if let Some(i) = pool.active.iter().position(|&e| e == entity) {
             pool.active.swap_remove(i);
-            commands
-                .entity(entity)
-                .insert(Visibility::Hidden)
-                .remove::<M>();
+            // Keep the pool marker `M` attached; only hide the entity. Re-inserting
+            // `M::default()` on acquire wiped per-entity state.
+            commands.entity(entity).insert(Visibility::Hidden);
             pool.available.push_back(entity);
         }
     }

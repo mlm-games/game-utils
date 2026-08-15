@@ -10,6 +10,7 @@ pub mod pooling;
 pub mod post_process;
 pub mod save;
 pub mod screen_effects;
+pub mod time_scale;
 pub mod transitions;
 pub mod ui_effects;
 pub mod vfx;
@@ -63,6 +64,7 @@ impl<S: FreelyMutableState> Plugin for EcosystemPlugin<S> {
             juice::JuicePlugin,
             post_process::ScreenEffectsPostProcessPlugin,
             screen_effects::ScreenEffectsPlugin,
+            time_scale::TimeScalePlugin,
             transitions::TransitionsPlugin::<S>::default(),
             ui_effects::UiEffectsPlugin,
             vfx::VfxPlugin,

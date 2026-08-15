@@ -184,8 +184,9 @@ pub fn input_blocked<S: FreelyMutableState>(tr: Res<Transition<S>>) -> bool {
     tr.block_input
 }
 
-/// Clears queued key/mouse presses while a transition blocks input, so a press
-/// during the wipe/fade can't leak into the new state.
+/// Clears queued key/mouse *edge* presses while a transition blocks input, so a press
+/// during the wipe/fade can't leak into the new state. Held keys are left intact, so
+/// holding a movement key across a short transition doesn't drop the input.
 fn clear_blocked_inputs<S: FreelyMutableState>(
     tr: Res<Transition<S>>,
     mut keys: ResMut<ButtonInput<KeyCode>>,
@@ -194,6 +195,16 @@ fn clear_blocked_inputs<S: FreelyMutableState>(
     if !tr.block_input {
         return;
     }
-    keys.reset_all();
-    mouse.reset_all();
+    for key in keys.get_just_pressed().copied().collect::<Vec<_>>() {
+        keys.clear_just_pressed(key);
+    }
+    for key in keys.get_just_released().copied().collect::<Vec<_>>() {
+        keys.clear_just_released(key);
+    }
+    for button in mouse.get_just_pressed().copied().collect::<Vec<_>>() {
+        mouse.clear_just_pressed(button);
+    }
+    for button in mouse.get_just_released().copied().collect::<Vec<_>>() {
+        mouse.clear_just_released(button);
+    }
 }

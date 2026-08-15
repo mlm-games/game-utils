@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use crate::time_scale::TimeScaleControl;
+
 /// Brief dip in virtual-time speed after a big hit.
 ///
 /// Mirrors the Godot `Engine.time_scale = 0.05 -> 1.0`. Distinct from a hard freeze-frame: time keeps
@@ -51,21 +53,19 @@ fn ease_out_cubic(t: f32) -> f32 {
 fn tick_hitstop(
     real: Res<Time<Real>>,
     mut hs: ResMut<HitStop>,
-    mut virtual_time: ResMut<Time<Virtual>>,
+    mut ctrl: ResMut<TimeScaleControl>,
 ) {
     if !hs.active {
-        if (virtual_time.relative_speed() - 1.0).abs() > 1e-6 {
-            virtual_time.set_relative_speed(1.0);
-        }
+        ctrl.hitstop_scale = 1.0;
         return;
     }
     hs.recover.tick(real.delta());
     let t = hs.recover.fraction().clamp(0.0, 1.0);
     hs.scale = hs.start_scale + (1.0 - hs.start_scale) * ease_out_cubic(t);
-    virtual_time.set_relative_speed(hs.scale.max(0.01));
+    ctrl.hitstop_scale = hs.scale.max(0.01);
     if hs.recover.just_finished() {
         hs.active = false;
-        virtual_time.set_relative_speed(1.0);
+        ctrl.hitstop_scale = 1.0;
     }
 }
 

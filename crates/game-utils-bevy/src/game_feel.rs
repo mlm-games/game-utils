@@ -1,11 +1,15 @@
 use bevy::input::gamepad::{Gamepad, GamepadRumbleIntensity, GamepadRumbleRequest};
 use bevy::prelude::*;
 
+use crate::time_scale::TimeScaleControl;
+
 #[derive(Component)]
 pub struct Recoil {
     pub offset: Vec2,
     pub timer: Timer,
-    pub original: Option<Vec3>,
+    /// Offset applied last frame, so the effect can be undone before movement runs
+    /// cleanly and re-applied additively on top of it.
+    pub last_applied: Vec2,
 }
 
 #[derive(Resource)]
@@ -38,7 +42,7 @@ impl GameFeel {
         commands.entity(entity).insert(Recoil {
             offset: dir.normalize_or_zero() * strength,
             timer: Timer::from_seconds(duration, TimerMode::Once),
-            original: None,
+            last_applied: Vec2::ZERO,
         });
     }
 
@@ -88,20 +92,17 @@ fn apply_recoil(
     mut q: Query<(Entity, &mut Transform, &mut Recoil)>,
 ) {
     for (e, mut tf, mut recoil) in &mut q {
-        if recoil.original.is_none() {
-            recoil.original = Some(tf.translation);
-            tf.translation += recoil.offset.extend(0.0);
-        }
+        tf.translation -= recoil.last_applied.extend(0.0);
+
         recoil.timer.tick(time.delta());
         let t = recoil.timer.fraction();
         let ease = 1.0 - (1.0 - t).powi(4);
-        if let Some(orig) = recoil.original {
-            tf.translation = orig + recoil.offset.extend(0.0) * (1.0 - ease);
-        }
+        let applied = recoil.offset * (1.0 - ease);
+        tf.translation += applied.extend(0.0);
+        recoil.last_applied = applied;
+
         if recoil.timer.just_finished() {
-            if let Some(orig) = recoil.original {
-                tf.translation = orig;
-            }
+            tf.translation -= recoil.last_applied.extend(0.0);
             commands.entity(e).remove::<Recoil>();
         }
     }
@@ -110,15 +111,16 @@ fn apply_recoil(
 fn tick_slow_motion(
     real: Res<Time<Real>>,
     mut slow: ResMut<SlowMotion>,
-    mut virtual_time: ResMut<Time<Virtual>>,
+    mut ctrl: ResMut<TimeScaleControl>,
 ) {
     if !slow.active {
+        ctrl.slow_mo_scale = 1.0;
         return;
     }
-    virtual_time.set_relative_speed(slow.scale);
+    ctrl.slow_mo_scale = slow.scale.clamp(0.01, 1.0);
     slow.timer.tick(real.delta());
     if slow.timer.just_finished() {
         slow.active = false;
-        virtual_time.set_relative_speed(1.0);
+        ctrl.slow_mo_scale = 1.0;
     }
 }

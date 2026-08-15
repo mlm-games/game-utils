@@ -24,7 +24,9 @@ pub struct BounceScale {
 pub struct Shake {
     pub timer: Timer,
     pub intensity: f32,
-    pub original: Option<Vec3>,
+    /// Offset applied last frame, so the effect can be undone and re-applied additively
+    /// on top of gameplay-driven translation (movement no longer fights the shake).
+    pub last_applied: Vec2,
 }
 
 #[derive(Component)]
@@ -64,7 +66,7 @@ impl Juice {
         commands.entity(entity).insert(Shake {
             timer: Timer::from_seconds(duration, TimerMode::Once),
             intensity,
-            original: None,
+            last_applied: Vec2::ZERO,
         });
     }
 }
@@ -158,19 +160,20 @@ fn animate_juice(
     }
 
     for (e, mut sh, mut tf) in set.p3().iter_mut() {
-        if sh.original.is_none() {
-            sh.original = Some(tf.translation);
-        }
+        // Undo last frame's shake so gameplay translation isn't fought.
+        tf.translation -= sh.last_applied.extend(0.0);
+
         sh.timer.tick(dt);
         let decay = 1.0 - sh.timer.fraction();
-        let o = sh.original.unwrap_or_default();
-        tf.translation = o + Vec3::new(
+        let applied = Vec3::new(
             (elapsed * 50.0).sin() * sh.intensity * decay,
             (elapsed * 47.0).cos() * sh.intensity * decay,
             0.0,
         );
+        tf.translation += applied;
+        sh.last_applied = applied.truncate();
         if sh.timer.just_finished() {
-            tf.translation = o;
+            tf.translation -= sh.last_applied.extend(0.0);
             commands.entity(e).remove::<Shake>();
         }
     }
