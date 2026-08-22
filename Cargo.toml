@@ -10,7 +10,7 @@ repository = "https://github.com/mlm-games/game-utils"
 rust-version = "1.96"
 
 [workspace.dependencies]
-glam = "0.33.2"
+glam = "0.33"
 serde = { version = "1", features = ["derive"] }
 ron = "0.12"
 directories = "6"
@@ -33,4 +33,4 @@ bevy = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ff
     "reflect_auto_register",
 ] }
 game-utils = { path = "crates/game-utils", version = "0.1.2" }
-repose-core = "0.27"
+repose-core = "0.28"
