@@ -230,16 +230,18 @@ impl Plugin for ScreenEffectsPlugin {
     }
 }
 
+// NOTE: screen-effect decay/integration runs on REAL time. These are presentation
+// effects.
 fn tick_chromatic(
-    time: Res<Time>,
+    real: Res<Time<Real>>,
     cfg: Res<ScreenEffectsConfig>,
     mut chrom: ResMut<ChromaticAberration>,
 ) {
-    chrom.0 = (chrom.0 - cfg.chromatic_decay * time.delta_secs()).max(0.0);
+    chrom.0 = (chrom.0 - cfg.chromatic_decay * real.delta_secs()).max(0.0);
 }
 
 fn apply_camera_shake(
-    time: Res<Time>,
+    real: Res<Time<Real>>,
     cfg: Res<ScreenEffectsConfig>,
     shake_cfg: Res<ImpactShakeConfig>,
     mut trauma: ResMut<Trauma>,
@@ -247,7 +249,7 @@ fn apply_camera_shake(
     mut q2: Query<(&mut Transform, &CameraBase), (With<Camera2d>, Without<Camera3d>)>,
     mut q3: Query<(&mut Transform, &CameraBase3d), (With<Camera3d>, Without<Camera2d>)>,
 ) {
-    let dt = time.delta_secs();
+    let dt = real.delta_secs();
 
     // Advance the spring-mass impulse shake.
     let spring = if dt > 0.0 {
