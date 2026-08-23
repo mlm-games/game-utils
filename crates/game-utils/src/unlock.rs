@@ -35,7 +35,7 @@ impl UnlockCondition {
 
     fn value(&self, store: &StatsStore, category: &str) -> Option<f32> {
         if self.global {
-            return store.best_global(&self.stat_id);
+            return store.best_global_with(&self.stat_id, self.aggregation);
         }
         store.best(category, &self.stat_id)
     }

@@ -1,5 +1,5 @@
-//! Per-entity hit flash driven on `Sprite.color`. Ported from Pathogenic's
-//! player-damage flash: the sprite tints toward a flash color, then eases back
+//! Per-entity hit flash driven on `Sprite.color` (and UI). Ported from Pathogenic's
+//! player-damage flash: the sprite/UI tints toward a flash color, then eases back
 //! to its original color. Add via [`HitFlash::apply`]; the system removes the
 //! component when the flash finishes.
 
@@ -50,9 +50,14 @@ impl Plugin for HitFlashPlugin {
 fn tick_hit_flash(
     time: Res<Time>,
     mut commands: Commands,
-    mut q: Query<(Entity, &mut Sprite, &mut HitFlash)>,
+    mut sprites: Query<(Entity, &mut Sprite, &mut HitFlash)>,
+    mut bgs: Query<(Entity, &mut BackgroundColor, &mut HitFlash), Without<Sprite>>,
+    mut texts: Query<
+        (Entity, &mut TextColor, &mut HitFlash),
+        (Without<Sprite>, Without<BackgroundColor>),
+    >,
 ) {
-    for (e, mut sprite, mut hf) in &mut q {
+    for (e, mut sprite, mut hf) in &mut sprites {
         if hf.original.is_none() {
             hf.original = Some(sprite.color);
         }
@@ -64,6 +69,34 @@ fn tick_hit_flash(
         sprite.color = base.mix(&hf.color, strength);
         if hf.timer.just_finished() {
             sprite.color = hf.original.unwrap_or(Color::WHITE);
+            commands.entity(e).remove::<HitFlash>();
+        }
+    }
+    for (e, mut bg, mut hf) in &mut bgs {
+        if hf.original.is_none() {
+            hf.original = Some(bg.0);
+        }
+        hf.timer.tick(time.delta());
+        let t = hf.timer.fraction().clamp(0.0, 1.0);
+        let strength = hf.value * (1.0 - t).powi(3);
+        let base = hf.original.unwrap_or(Color::WHITE);
+        bg.0 = base.mix(&hf.color, strength);
+        if hf.timer.just_finished() {
+            bg.0 = hf.original.unwrap_or(Color::WHITE);
+            commands.entity(e).remove::<HitFlash>();
+        }
+    }
+    for (e, mut text_color, mut hf) in &mut texts {
+        if hf.original.is_none() {
+            hf.original = Some(text_color.0);
+        }
+        hf.timer.tick(time.delta());
+        let t = hf.timer.fraction().clamp(0.0, 1.0);
+        let strength = hf.value * (1.0 - t).powi(3);
+        let base = hf.original.unwrap_or(Color::WHITE);
+        text_color.0 = base.mix(&hf.color, strength);
+        if hf.timer.just_finished() {
+            text_color.0 = hf.original.unwrap_or(Color::WHITE);
             commands.entity(e).remove::<HitFlash>();
         }
     }

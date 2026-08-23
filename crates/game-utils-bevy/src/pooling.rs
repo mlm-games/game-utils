@@ -58,11 +58,13 @@ impl ObjectPool {
         commands: &mut Commands,
         spawn: impl FnOnce(&mut EntityCommands),
     ) -> Option<Entity> {
-        if let Some(e) = pool.available.pop_front() {
-            // Reused entity keeps its existing state (including the marker `M`); only
-            // visibility flips. State reset is the caller's job via a per-pool reset.
+        while let Some(e) = pool.available.pop_front() {
+            // Skip entities that were despawned while pooled.
+            let Ok(mut ec) = commands.get_entity(e) else {
+                continue;
+            };
             pool.active.push(e);
-            commands.entity(e).insert(Visibility::Visible);
+            ec.insert(Visibility::Visible);
             return Some(e);
         }
         if pool.active.len() >= pool.max_size {
@@ -82,10 +84,16 @@ impl ObjectPool {
     ) {
         if let Some(i) = pool.active.iter().position(|&e| e == entity) {
             pool.active.swap_remove(i);
-            // Keep the pool marker `M` attached; only hide the entity. Re-inserting
-            // `M::default()` on acquire wiped per-entity state.
-            commands.entity(entity).insert(Visibility::Hidden);
-            pool.available.push_back(entity);
+            if let Ok(mut ec) = commands.get_entity(entity) {
+                ec.insert(Visibility::Hidden);
+                pool.available.push_back(entity);
+            }
         }
+    }
+
+    /// Drop dead entities from both lists (call once per frame if desired).
+    pub fn scrub<M: Component + Default>(pool: &mut EntityPool<M>, exists: impl Fn(Entity) -> bool) {
+        pool.available.retain(|&e| exists(e));
+        pool.active.retain(|&e| exists(e));
     }
 }

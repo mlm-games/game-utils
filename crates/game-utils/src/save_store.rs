@@ -77,6 +77,18 @@ impl SaveStore {
         matches!((first, last), (Some(0x7B), Some(0x7D)))
     }
 
+    /// Cheap integrity probe for RON / any non-empty UTF-8 text that is not truncated
+    /// mid-write (non-empty + valid UTF-8). Prefer a typed parse in callers when possible.
+    pub fn is_intact_ron(bytes: &[u8]) -> bool {
+        if bytes.is_empty() {
+            return false;
+        }
+        std::str::from_utf8(bytes).is_ok_and(|s| {
+            let t = s.trim();
+            !t.is_empty() && ron::from_str::<ron::Value>(t).is_ok()
+        })
+    }
+
     fn now() -> u64 {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -128,12 +140,21 @@ impl SaveStore {
 
         if target_path.exists() {
             let target_intact = Self::read_all(&target_path)
+                .ok()
+                .flatten()
                 .map(|b| (self.validate)(&b))
                 .unwrap_or(false);
             if !target_intact {
                 self.quarantine_corrupt_file(&target_path);
             } else if self.should_rotate_bak(&bak_path) {
-                fs::rename(&target_path, &bak_path).map_err(|e| e.to_string())?;
+                // Best-effort rotate; on Windows rename-over may need remove first.
+                if fs::rename(&target_path, &bak_path).is_err() {
+                    let _ = fs::remove_file(&bak_path);
+                    if fs::rename(&target_path, &bak_path).is_err() {
+                        let _ = fs::copy(&target_path, &bak_path);
+                        let _ = fs::remove_file(&target_path);
+                    }
+                }
             } else {
                 fs::remove_file(&target_path).map_err(|e| e.to_string())?;
             }
@@ -142,12 +163,17 @@ impl SaveStore {
         match fs::rename(&temp_path, &target_path) {
             Ok(()) => Ok(()),
             Err(first_err) => {
+                // Windows: cannot rename onto an existing file.
+                let _ = fs::remove_file(&target_path);
                 if fs::rename(&temp_path, &target_path).is_ok() {
                     return Ok(());
                 }
+                // Last resort: plain write (still success if it lands).
                 fs::write(&target_path, data).map_err(|e| e.to_string())?;
                 let _ = fs::remove_file(&temp_path);
-                Err(first_err.to_string())
+                // Data is on disk; don't fail the save.
+                let _ = first_err;
+                Ok(())
             }
         }
     }
@@ -166,59 +192,58 @@ impl SaveStore {
         extra_corrupt_fallbacks: &[PathBuf],
     ) -> LoadResult {
         let target_path = self.path();
-        let target_data = Self::read_all(&target_path);
-        let mut corrupt = false;
+        let target_read = Self::read_all(&target_path);
 
-        let parsed = match &target_data {
-            None => LoadStatus::Missing,
-            Some(bytes) if validate(bytes) => LoadStatus::Ok,
-            _ => {
+        let parsed = match target_read {
+            Err(_io) if target_path.exists() => {
+                // If it exists but unreadable (lock/AV)
+                return LoadResult {
+                    data: None,
+                    status: LoadStatus::Unreadable,
+                    recovered_from: None,
+                };
+            }
+            Err(_) | Ok(None) => LoadStatus::Missing,
+            Ok(Some(ref bytes)) if validate(bytes) => {
+                return LoadResult {
+                    data: Some(bytes.clone()),
+                    status: LoadStatus::Ok,
+                    recovered_from: None,
+                };
+            }
+            Ok(Some(_)) => {
                 if self.quarantine_corrupt {
                     self.quarantine_corrupt_file(&target_path);
                 }
-                corrupt = true;
                 LoadStatus::Corrupt
             }
         };
 
-        match parsed {
-            LoadStatus::Ok => LoadResult {
-                data: target_data,
-                status: LoadStatus::Ok,
-                recovered_from: None,
-            },
-            LoadStatus::Unreadable => LoadResult {
-                data: None,
-                status: LoadStatus::Unreadable,
-                recovered_from: None,
-            },
-            status => {
-                let mut candidates: Vec<PathBuf> = vec![self.temp_path(), self.bak_path()];
-                if corrupt {
-                    candidates.extend(extra_corrupt_fallbacks.iter().cloned());
-                }
-                for fallback in candidates {
-                    if fallback == target_path {
-                        continue;
-                    }
-                    let Some(bytes) = Self::read_all(&fallback) else {
-                        continue;
-                    };
-                    if validate(&bytes) {
-                        let _ = self.write(&bytes);
-                        return LoadResult {
-                            data: Some(bytes),
-                            status,
-                            recovered_from: Some(fallback),
-                        };
-                    }
-                }
-                LoadResult {
-                    data: None,
-                    status,
-                    recovered_from: None,
-                }
+        let corrupt = matches!(parsed, LoadStatus::Corrupt);
+        let mut candidates: Vec<PathBuf> = vec![self.temp_path(), self.bak_path()];
+        if corrupt {
+            candidates.extend(extra_corrupt_fallbacks.iter().cloned());
+        }
+        for fallback in candidates {
+            if fallback == target_path {
+                continue;
             }
+            let Ok(Some(bytes)) = Self::read_all(&fallback) else {
+                continue;
+            };
+            if validate(&bytes) {
+                let _ = self.write(&bytes);
+                return LoadResult {
+                    data: Some(bytes),
+                    status: parsed,
+                    recovered_from: Some(fallback),
+                };
+            }
+        }
+        LoadResult {
+            data: None,
+            status: parsed,
+            recovered_from: None,
         }
     }
 
@@ -236,8 +261,13 @@ impl SaveStore {
         self.path().exists()
     }
 
-    fn read_all(path: &Path) -> Option<Vec<u8>> {
-        fs::read(path).ok()
+    /// `Ok(None)` = missing, `Err` = IO failure on an existing path, `Ok(Some)` = bytes.
+    fn read_all(path: &Path) -> Result<Option<Vec<u8>>, std::io::Error> {
+        match fs::read(path) {
+            Ok(b) => Ok(Some(b)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 }
 

@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 /// Single owner of `Time<Virtual>` relative speed + pause.
-#[derive(Resource, Default)]
+#[derive(Resource)]
 pub struct TimeScaleControl {
     /// App-level pause (settings/pause menu). Freezes virtual time.
     pub paused: bool,
@@ -13,11 +13,22 @@ pub struct TimeScaleControl {
     pub hitstop_scale: f32,
 }
 
+impl Default for TimeScaleControl {
+    fn default() -> Self {
+        Self {
+            paused: false,
+            freeze_active: false,
+            slow_mo_scale: 1.0,
+            hitstop_scale: 1.0,
+        }
+    }
+}
+
 impl TimeScaleControl {
     /// Multiplicative virtual-time speed combining all active feel scales.
     pub fn effective_speed(&self) -> f32 {
         let s = self.slow_mo_scale.max(0.01) * self.hitstop_scale.max(0.01);
-        s.clamp(0.01, 1.0)
+        s.clamp(0.01, 32.0)
     }
 }
 

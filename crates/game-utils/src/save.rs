@@ -4,6 +4,8 @@ use std::path::PathBuf;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
+use crate::save_store::SaveStore;
+
 /// Implemented by save data types so the manager can stamp/roll the current version.
 pub trait Versioned {
     fn version(&self) -> u32;
@@ -38,52 +40,39 @@ impl SaveManager {
         }
     }
 
-    fn path(&self) -> PathBuf {
+    /// Resolve the on-disk directory (creates it).
+    pub fn data_dir(&self) -> PathBuf {
         if let Some(proj) = directories::ProjectDirs::from(self.qualifier, self.org, self.app) {
-            let dir = proj.data_dir();
-            let _ = fs::create_dir_all(dir);
-            dir.join(self.file_name)
+            let dir = proj.data_dir().to_path_buf();
+            let _ = fs::create_dir_all(&dir);
+            dir
         } else {
-            PathBuf::from("saves").join(self.file_name)
+            let dir = PathBuf::from("saves");
+            let _ = fs::create_dir_all(&dir);
+            dir
         }
+    }
+
+    pub fn path(&self) -> PathBuf {
+        self.data_dir().join(self.file_name)
+    }
+
+    fn store(&self) -> SaveStore {
+        SaveStore::new(self.data_dir(), self.file_name).with_validator(SaveStore::is_intact_ron)
     }
 
     pub fn save<T: Serialize>(&self, data: &T) -> Result<(), String> {
-        let path = self.path();
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-        }
         let s = ron::ser::to_string_pretty(data, Default::default()).map_err(|e| e.to_string())?;
-
-        let temp = path.with_extension("tmp");
-        fs::write(&temp, s).map_err(|e| e.to_string())?;
-
-        if path.exists() {
-            let _ = fs::copy(&path, path.with_extension("bak"));
-        }
-        match fs::rename(&temp, &path) {
-            Ok(()) => Ok(()),
-            Err(first_err) => {
-                // Windows can't rename over an existing target; retry after removing it,
-                // otherwise fall back to a plain write so the save isn't lost.
-                let _ = fs::remove_file(&path);
-                if fs::rename(&temp, &path).is_ok() {
-                    return Ok(());
-                }
-                let s = ron::ser::to_string_pretty(data, Default::default())
-                    .map_err(|e| e.to_string())?;
-                fs::write(&path, s).map_err(|e| e.to_string())?;
-                let _ = fs::remove_file(&temp);
-                Err(first_err.to_string())
-            }
-        }
+        self.store().write(s.as_bytes())
     }
 
     pub fn load<T: DeserializeOwned + Default + Versioned>(&self) -> T {
-        let path = self.path();
-        let mut data: T = fs::read_to_string(path)
-            .ok()
-            .and_then(|s| ron::from_str(&s).ok())
+        let store = self.store();
+        let res = store.load(&SaveStore::is_intact_ron, &[]);
+        let mut data: T = res
+            .data
+            .as_deref()
+            .and_then(|b| ron::from_str(&String::from_utf8_lossy(b)).ok())
             .unwrap_or_default();
         let from = data.version();
         if from < self.current_version {

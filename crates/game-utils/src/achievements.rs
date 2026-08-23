@@ -50,10 +50,13 @@ impl AchievementCondition {
     pub fn current_value(&self, store: &StatsStore, category: &str) -> Option<f32> {
         match self {
             Self::Stat {
-                stat_id, global, ..
+                stat_id,
+                aggregation,
+                global,
+                ..
             } => {
                 if *global {
-                    store.best_global(stat_id)
+                    store.best_global_with(stat_id, *aggregation)
                 } else {
                     store.best(category, stat_id)
                 }

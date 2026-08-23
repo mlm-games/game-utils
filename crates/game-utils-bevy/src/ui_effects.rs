@@ -25,6 +25,17 @@ pub struct Typewriter {
     pub finished: bool,
 }
 
+impl Typewriter {
+    pub fn new(full_text: impl Into<String>, secs_per_char: f32) -> Self {
+        Self {
+            full_text: full_text.into(),
+            visible_chars: 0,
+            timer: Timer::from_seconds(secs_per_char.max(0.001), TimerMode::Once),
+            finished: false,
+        }
+    }
+}
+
 #[derive(Component)]
 pub struct NumberCounter {
     pub from: f32,
@@ -32,6 +43,18 @@ pub struct NumberCounter {
     pub current: f32,
     pub timer: Timer,
     pub finished: bool,
+}
+
+impl NumberCounter {
+    pub fn new(from: f32, to: f32, duration_secs: f32) -> Self {
+        Self {
+            from,
+            to,
+            current: from,
+            timer: Timer::from_seconds(duration_secs.max(0.0), TimerMode::Once),
+            finished: false,
+        }
+    }
 }
 
 pub struct UiEffectsPlugin;
@@ -65,10 +88,10 @@ fn typewriter_system(time: Res<Time>, mut q: Query<(&mut Text, &mut Typewriter)>
         }
         tw.timer.tick(time.delta());
         if tw.timer.just_finished() {
-            tw.visible_chars = (tw.visible_chars + 1).min(tw.full_text.len());
-            let s: String = tw.full_text.chars().take(tw.visible_chars).collect();
-            text.0 = s;
-            if tw.visible_chars >= tw.full_text.len() {
+            let total_chars = tw.full_text.chars().count();
+            tw.visible_chars = (tw.visible_chars + 1).min(total_chars);
+            text.0 = tw.full_text.chars().take(tw.visible_chars).collect();
+            if tw.visible_chars >= total_chars {
                 tw.finished = true;
             } else {
                 tw.timer.reset();

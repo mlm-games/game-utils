@@ -1,6 +1,11 @@
+use std::collections::HashMap;
+
 use bevy::{
     asset::{embedded_asset, load_embedded_asset},
-    core_pipeline::{Core2dSystems, FullscreenShader, schedule::Core2d},
+    core_pipeline::{
+        Core2dSystems, Core3dSystems, FullscreenShader,
+        schedule::{Core2d, Core3d},
+    },
     prelude::*,
     render::{
         RenderApp, RenderStartup,
@@ -45,7 +50,9 @@ impl Default for ScreenEffectSettings {
 struct ScreenEffectPipeline {
     layout: BindGroupLayoutDescriptor,
     sampler: Sampler,
-    pipeline_id: CachedRenderPipelineId,
+    pipelines: HashMap<TextureFormat, CachedRenderPipelineId>,
+    shader: Handle<Shader>,
+    vertex: VertexState,
 }
 
 #[derive(Default)]
@@ -73,6 +80,10 @@ impl Plugin for ScreenEffectsPostProcessPlugin {
             .add_systems(
                 Core2d,
                 run_screen_effects.in_set(Core2dSystems::PostProcess),
+            )
+            .add_systems(
+                Core3d,
+                run_screen_effects.in_set(Core3dSystems::PostProcess),
             );
     }
 }
@@ -100,43 +111,78 @@ fn init_screen_effect_pipeline(
     let shader = load_embedded_asset!(asset_server.as_ref(), "shaders/screen_effects.wgsl");
     let vertex_state = fullscreen_shader.to_vertex_state();
 
-    let pipeline_id = pipeline_cache.queue_render_pipeline(RenderPipelineDescriptor {
-        label: Some("screen_effect_pipeline".into()),
-        layout: vec![layout.clone()],
-        vertex: vertex_state,
-        fragment: Some(FragmentState {
-            shader,
-            targets: vec![Some(ColorTargetState {
-                format: TextureFormat::Rgba8UnormSrgb,
-                blend: None,
-                write_mask: ColorWrites::ALL,
-            })],
+    // Pre-queue common formats (LDR + HDR). Additional formats are lazily queued.
+    let mut pipelines = HashMap::new();
+    for format in [
+        TextureFormat::Rgba8UnormSrgb,
+        TextureFormat::Bgra8UnormSrgb,
+        TextureFormat::Rgba16Float,
+        TextureFormat::Rgba8Unorm,
+        TextureFormat::Bgra8Unorm,
+    ] {
+        let pipeline_id = pipeline_cache.queue_render_pipeline(RenderPipelineDescriptor {
+            label: Some(format!("screen_effect_pipeline_{:?}", format).into()),
+            layout: vec![layout.clone()],
+            vertex: vertex_state.clone(),
+            fragment: Some(FragmentState {
+                shader: shader.clone(),
+                targets: vec![Some(ColorTargetState {
+                    format,
+                    blend: None,
+                    write_mask: ColorWrites::ALL,
+                })],
+                ..default()
+            }),
             ..default()
-        }),
-        ..default()
-    });
+        });
+        pipelines.insert(format, pipeline_id);
+    }
 
     commands.insert_resource(ScreenEffectPipeline {
         layout,
         sampler,
-        pipeline_id,
+        pipelines,
+        shader,
+        vertex: vertex_state,
     });
 }
 
 fn run_screen_effects(
     view: ViewQuery<(&ViewTarget, &DynamicUniformIndex<ScreenEffectSettings>)>,
-    pipeline_res: Option<Res<ScreenEffectPipeline>>,
+    pipeline_res: Option<ResMut<ScreenEffectPipeline>>,
     pipeline_cache: Res<PipelineCache>,
     settings_uniforms: Res<ComponentUniforms<ScreenEffectSettings>>,
     mut cache: Local<PostProcessBindGroupCache>,
     mut ctx: RenderContext,
 ) {
-    let Some(pipeline) = pipeline_res else {
+    let Some(mut pipeline) = pipeline_res else {
         return;
     };
     let (view_target, settings_index) = view.into_inner();
 
-    let Some(render_pipeline) = pipeline_cache.get_render_pipeline(pipeline.pipeline_id) else {
+    let format = view_target.main_texture_format();
+    let layout_cloned = pipeline.layout.clone();
+    let shader_cloned = pipeline.shader.clone();
+    let vertex_cloned = pipeline.vertex.clone();
+    let pipeline_id = *pipeline.pipelines.entry(format).or_insert_with(|| {
+        pipeline_cache.queue_render_pipeline(RenderPipelineDescriptor {
+            label: Some(format!("screen_effect_pipeline_{:?}", format).into()),
+            layout: vec![layout_cloned.clone()],
+            vertex: vertex_cloned.clone(),
+            fragment: Some(FragmentState {
+                shader: shader_cloned.clone(),
+                targets: vec![Some(ColorTargetState {
+                    format,
+                    blend: None,
+                    write_mask: ColorWrites::ALL,
+                })],
+                ..default()
+            }),
+            ..default()
+        })
+    });
+
+    let Some(render_pipeline) = pipeline_cache.get_render_pipeline(pipeline_id) else {
         return;
     };
     let Some(settings_binding) = settings_uniforms.uniforms().binding() else {
@@ -181,6 +227,22 @@ fn run_screen_effects(
     render_pass.set_pipeline(render_pipeline);
     render_pass.set_bind_group(0, bind_group, &[settings_index.index()]);
     render_pass.draw(0..3, 0..1);
+}
+
+/// Inserts [`ScreenEffectSettings`] on any camera that doesn't have it yet.
+pub fn ensure_screen_effect_settings(
+    mut commands: Commands,
+    q: Query<
+        Entity,
+        (
+            Or<(With<Camera2d>, With<Camera3d>)>,
+            Without<ScreenEffectSettings>,
+        ),
+    >,
+) {
+    for e in &q {
+        commands.entity(e).insert(ScreenEffectSettings::default());
+    }
 }
 
 pub fn sync_post_process_settings<S: FreelyMutableState>(

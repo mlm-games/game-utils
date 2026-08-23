@@ -93,12 +93,19 @@ impl StatsStore {
         best
     }
 
-    /// Global best across all categories for a stat id.
-    pub fn best_global(&self, stat_id: &str) -> Option<f32> {
-        self.by_category
+    /// Global best across all categories for a stat id, under `agg`.
+    pub fn best_global_with(&self, stat_id: &str, agg: Aggregation) -> Option<f32> {
+        let values: Vec<Option<f32>> = self
+            .by_category
             .values()
-            .filter_map(|m| m.get(stat_id).copied())
-            .fold(None, |acc, v| Some(v.max(acc.unwrap_or(v))))
+            .map(|m| m.get(stat_id).copied())
+            .collect();
+        aggregate(agg, &values)
+    }
+
+    /// Global best using Max (legacy helper). Prefer [`Self::best_global_with`].
+    pub fn best_global(&self, stat_id: &str) -> Option<f32> {
+        self.best_global_with(stat_id, Aggregation::Max)
     }
 
     pub fn category_iter(&self) -> impl Iterator<Item = (&str, &HashMap<String, f32>)> {

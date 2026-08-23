@@ -14,7 +14,6 @@ game-utils.workspace = true
 bevy.workspace = true
 rand.workspace = true
 serde.workspace = true
-repose-core.workspace = true
 
 [lints.clippy]
 type_complexity = "allow"

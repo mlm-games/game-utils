@@ -68,6 +68,13 @@ impl<S: FreelyMutableState> Plugin for EcosystemPlugin<S> {
             transitions::TransitionsPlugin::<S>::default(),
             ui_effects::UiEffectsPlugin,
             vfx::VfxPlugin,
-        ));
+        ))
+        .add_systems(
+            Update,
+            (
+                post_process::ensure_screen_effect_settings,
+                post_process::sync_post_process_settings::<S>,
+            ),
+        );
     }
 }

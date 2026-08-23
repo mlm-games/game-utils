@@ -148,12 +148,12 @@ impl ProfileManager {
     }
 
     /// Load the pointer config, run migration, and ensure the active profile dir exists.
-    /// Idempotent.
+    /// Idempotent. On failure, leaves the manager uninitialized so a later call can retry.
     pub fn init(&mut self) -> Result<(), ProfileError> {
         if self.initialized {
             return Ok(());
         }
-        self.initialized = true;
+        // Do NOT mark initialized until the whole path succeeds.
         self.load_pointer();
 
         let active = self.active.clamp(1, self.num_profiles);
@@ -165,6 +165,7 @@ impl ProfileManager {
         if self.fallback_path_none_left() || self.migrated {
             self.legacy_fallback = false;
         }
+        self.initialized = true;
         Ok(())
     }
 

@@ -149,9 +149,15 @@ impl SfxPool {
         }
 
         if self.voices.is_empty() {
-            // Pool wrapped: grow on demand (the ring started prewarmed but can be emptied
-            // by despawners); keeps the pool bounded by use over time.
-            self.prewarm(commands);
+            // Not prewarming full ring here to avoid unbounded grow.
+            let e = commands
+                .spawn((
+                    PlaybackSettings::REMOVE.with_volume(bevy::audio::Volume::Linear(0.0)),
+                    BaseVolume(0.0),
+                    SfxChannel,
+                ))
+                .id();
+            self.voices.push_back(e);
         }
         let voice = self.voices.front().copied().expect("voices prewarmed");
         self.voices.pop_front();
@@ -168,12 +174,15 @@ impl SfxPool {
         let mut ec = commands.entity(voice);
         ec.remove::<AudioPlayer<AudioSource>>();
         ec.remove::<PlaybackSettings>();
+        ec.remove::<bevy::audio::SpatialAudioSink>();
+        ec.remove::<AudioSink>();
         ec.insert((
             BaseVolume(volume),
             AudioPlayer::new(handle.clone()),
             PlaybackSettings::REMOVE
                 .with_volume(bevy::audio::Volume::Linear(volume))
-                .with_speed(pitch),
+                .with_speed(pitch)
+                .with_spatial(true),
             Transform::from_translation(pos),
         ));
         self.frame_collapse
@@ -208,7 +217,26 @@ impl SfxPool {
     }
 }
 
-fn start_sfx_frame(mut pool: ResMut<SfxPool>) {
+fn start_sfx_frame(
+    mut pool: ResMut<SfxPool>,
+    live: Query<Entity, With<SfxChannel>>,
+    mut commands: Commands,
+) {
+    let live_set: std::collections::HashSet<_> = live.iter().collect();
+    pool.voices.retain(|e| live_set.contains(e));
+    pool.frame_collapse.retain(|_, (e, _)| live_set.contains(e));
+
+    let missing = pool.max_concurrent.saturating_sub(pool.voices.len());
+    for _ in 0..missing {
+        let e = commands
+            .spawn((
+                PlaybackSettings::REMOVE.with_volume(bevy::audio::Volume::Linear(0.0)),
+                BaseVolume(0.0),
+                SfxChannel,
+            ))
+            .id();
+        pool.voices.push_back(e);
+    }
     pool.start_frame();
 }
 
@@ -299,16 +327,17 @@ fn sync_channel_volumes(
     channels: Res<AudioChannels>,
     mut q: Query<
         (
-            &mut AudioSink,
             Option<&BaseVolume>,
             Option<&SfxChannel>,
             Option<&MusicChannel>,
             Option<&UiChannel>,
+            Option<&mut AudioSink>,
+            Option<&mut bevy::audio::SpatialAudioSink>,
         ),
         Without<MusicFade>,
     >,
 ) {
-    for (mut sink, base, sfx, music, ui) in &mut q {
+    for (base, sfx, music, ui, sink, spatial) in &mut q {
         let base = base.map(|b| b.0).unwrap_or(1.0);
         let bus = if sfx.is_some() {
             channels.sfx_volume()
@@ -319,7 +348,12 @@ fn sync_channel_volumes(
         } else {
             channels.master
         };
-        sink.set_volume(bevy::audio::Volume::Linear(base * bus));
+        if let Some(mut s) = sink {
+            s.set_volume(bevy::audio::Volume::Linear(base * bus));
+        }
+        if let Some(mut s) = spatial {
+            s.set_volume(bevy::audio::Volume::Linear(base * bus));
+        }
     }
 }
 

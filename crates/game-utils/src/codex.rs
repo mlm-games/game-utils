@@ -182,8 +182,13 @@ impl CodexStore {
             self.codex = c;
             self.loaded = true;
             self.loaded_from = self.store.path();
+        } else {
+            // If missing/corrupt/unreadable with no recovery.
+            self.loaded = matches!(res.status, LoadStatus::Ok);
+            if !self.loaded {
+                self.codex = Codex::default();
+            }
         }
-        self.loaded = true;
         res.status
     }
 

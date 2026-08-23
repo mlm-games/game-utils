@@ -15,12 +15,14 @@ fn es_key(item_seed: u64, weight: f32) -> f64 {
 }
 
 /// Deterministic per-(parent_seed, index) seed for [`es_key`].
+/// Uses a fixed splitmix64 mix so results don't change across Rust stdlib versions.
 fn item_seed(parent_seed: u64, index: usize) -> u64 {
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    use std::hash::{Hash, Hasher};
-    parent_seed.hash(&mut hasher);
-    index.hash(&mut hasher);
-    hasher.finish()
+    let mut z = parent_seed
+        .wrapping_add(index as u64)
+        .wrapping_add(0x9E3779B97F4A7C15);
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58476D1CE4E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D049BB133111EB);
+    z ^ (z >> 31)
 }
 
 pub struct Weighted;

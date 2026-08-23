@@ -41,14 +41,19 @@ pub struct LocaleResources {
 impl LocaleResources {
     pub fn register(&mut self, locale: &str, ftl: &str, keys: &[&str]) {
         let (loc, map) = load_ftl(locale, ftl, keys);
-        if self.available.contains(&loc) {
+        if self.available.iter().any(|a| a == &loc) {
+            // Allow refresh of an already-registered locale.
+            self.all.insert(loc.clone(), map);
+            if self.current == loc {
+                self.refresh();
+            }
             return;
         }
         self.available.push(loc.clone());
-        self.all.insert(loc, map);
+        self.all.insert(loc.clone(), map);
         if self.current.is_empty() {
-            self.current = locale.to_string();
-            self.translations = self.all[locale].clone();
+            self.current = loc.clone();
+            self.translations = self.all.get(&loc).cloned().unwrap_or_default();
         }
     }
 

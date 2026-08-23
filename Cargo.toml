@@ -30,7 +30,12 @@ bevy = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ff
     "bevy_state",
     "bevy_text",
     "bevy_ui",
+    "bevy_window",
     "reflect_auto_register",
+    "keyboard",
+    "mouse",
+    "gamepad",
+    "std",
+    "async_executor",
 ] }
 game-utils = { path = "crates/game-utils", version = "0.1.2" }
-repose-core = "0.28"
