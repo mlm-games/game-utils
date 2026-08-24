@@ -264,9 +264,9 @@ fn apply_camera_shake(
     for (mut tf, base) in &mut q2 {
         let offset = if shake_pow > 0.001 {
             let mag = shake_pow * cfg.shake_magnitude_2d;
-            let ox = rng.random_range(-mag..mag);
-            let oy = rng.random_range(-mag..mag);
-            let rot = rng.random_range(-cfg.rotation_jitter_2d..cfg.rotation_jitter_2d) * shake_pow;
+            let ox = sample_symmetric(&mut rng, mag);
+            let oy = sample_symmetric(&mut rng, mag);
+            let rot = sample_symmetric(&mut rng, cfg.rotation_jitter_2d) * shake_pow;
             tf.rotation = Quat::from_rotation_z(base.rotation + rot);
             Vec3::new(spring.x + ox, spring.y + oy, 0.0)
         } else {
@@ -278,11 +278,10 @@ fn apply_camera_shake(
     for (mut tf, base) in &mut q3 {
         let offset = if shake_pow > 0.001 {
             let mag = shake_pow * cfg.shake_magnitude_3d;
-            let ox = rng.random_range(-mag..mag);
-            let oy = rng.random_range(-mag..mag);
-            let oz = rng.random_range(-mag..mag);
-            let rot_j =
-                rng.random_range(-cfg.rotation_jitter_3d..cfg.rotation_jitter_3d) * shake_pow;
+            let ox = sample_symmetric(&mut rng, mag);
+            let oy = sample_symmetric(&mut rng, mag);
+            let oz = sample_symmetric(&mut rng, mag);
+            let rot_j = sample_symmetric(&mut rng, cfg.rotation_jitter_3d) * shake_pow;
             tf.rotation = base.rotation * Quat::from_rotation_z(rot_j);
             Vec3::new(spring.x + ox, spring.y + oy, oz)
         } else {
@@ -292,6 +291,14 @@ fn apply_camera_shake(
         tf.translation = base.translation + offset;
     }
     trauma.0 = (trauma.0 - cfg.trauma_decay * dt).max(0.0);
+}
+
+fn sample_symmetric(rng: &mut impl RngExt, extent: f32) -> f32 {
+    if extent > 0.0 {
+        rng.random_range(-extent..extent)
+    } else {
+        0.0
+    }
 }
 
 fn tick_flash(real: Res<Time<Real>>, mut flash: ResMut<FlashWhite>) {
@@ -322,5 +329,23 @@ fn tick_freeze(
     if freeze.timer.just_finished() {
         freeze.active = false;
         ctrl.freeze_active = false;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn zero_extent_is_no_jitter_not_panic() {
+        // Regression: random_range(-0.0..0.0) panics ("cannot sample empty
+        // range") whenever a consumer configures an extent of 0.
+        let mut rng = rand::rng();
+        assert_eq!(sample_symmetric(&mut rng, 0.0), 0.0);
+        assert_eq!(sample_symmetric(&mut rng, -1.0), 0.0);
+        for _ in 0..100 {
+            let v = sample_symmetric(&mut rng, 2.5);
+            assert!((-2.5..2.5).contains(&v));
+        }
     }
 }
