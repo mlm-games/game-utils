@@ -2,7 +2,7 @@
 
 use bevy::prelude::*;
 
-use crate::screen_effects::{CameraBase, CameraShakeSet};
+use crate::screen_effects::CameraBase;
 
 /// Frame-rate-independent lerp factor equivalent to Godot's per-physics-frame
 /// `lerp(a, b, weight)` at 60 tps.
@@ -63,7 +63,7 @@ pub struct CameraFollowPlugin;
 
 impl Plugin for CameraFollowPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, camera_follow_system.before(CameraShakeSet));
+        app.add_systems(FixedUpdate, camera_follow_system);
     }
 }
 
