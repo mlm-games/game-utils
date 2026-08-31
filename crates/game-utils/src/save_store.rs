@@ -1,6 +1,7 @@
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+use crate::storage::{FsStorage, Storage};
 
 pub const BAK_MIN_AGE_SECS: u64 = 300;
 
@@ -22,29 +23,37 @@ pub struct LoadResult {
 
 /// Crash-safe file store: serializes through a temp file + atomic rename, rotates a
 /// `.bak` for rollback, quarantines corrupt files, and recovers from backups on load.
+/// Generic over [`Storage`] so the same logic works on `FsStorage` (native) and
+/// `MemoryStorage` (tests/WASM). Ron stays the default codec.
 #[derive(Debug, Clone)]
-pub struct SaveStore {
+pub struct SaveStore<S: Storage = FsStorage> {
     pub dir: PathBuf,
     pub file_name: String,
     pub bak_min_age_secs: u64,
-    /// When true, a target that fails `validate` is renamed aside (timestamped) instead
-    /// of deleted, so corrupt saves stay on disk for support/manual recovery.
     pub quarantine_corrupt: bool,
-    /// Cheap integrity probe used when rotating an existing target: a target that fails
-    /// it is quarantined rather than rotated into `.bak`. Defaults to the JSON probe
-    /// ([`Self::is_intact_json`]); set it to match the serialization format (e.g. a RON
-    /// parse) so non-JSON stores aren't mistaken for corrupt on every write.
     pub validate: fn(&[u8]) -> bool,
+    storage: S,
 }
 
-impl SaveStore {
+impl SaveStore<FsStorage> {
     pub fn new(dir: impl Into<PathBuf>, file_name: impl Into<String>) -> Self {
+        Self::new_with_storage(dir, file_name, FsStorage)
+    }
+}
+
+impl<S: Storage> SaveStore<S> {
+    pub fn new_with_storage(
+        dir: impl Into<PathBuf>,
+        file_name: impl Into<String>,
+        storage: S,
+    ) -> Self {
         Self {
             dir: dir.into(),
             file_name: file_name.into(),
             bak_min_age_secs: BAK_MIN_AGE_SECS,
             quarantine_corrupt: true,
             validate: Self::is_intact_json,
+            storage,
         }
     }
 
@@ -52,6 +61,10 @@ impl SaveStore {
     pub fn with_validator(mut self, validate: fn(&[u8]) -> bool) -> Self {
         self.validate = validate;
         self
+    }
+
+    pub fn storage(&self) -> &S {
+        &self.storage
     }
 
     pub fn path(&self) -> PathBuf {
@@ -67,14 +80,11 @@ impl SaveStore {
     }
 
     /// Integrity probe for JSON saves: parses the bytes as JSON and accepts objects
-    /// and arrays; rejects empty, truncated, or syntactically invalid JSON.  Falls
-    /// back to a brace/bracket sniff if `serde_json` rejects a trailing-garbage
-    /// edge case, so `"{garbage}}"` is rejected.
+    /// and arrays; rejects empty, truncated, or syntactically invalid JSON.
     pub fn is_intact_json(bytes: &[u8]) -> bool {
         if bytes.is_empty() {
             return false;
         }
-
         let trimmed = {
             let s = bytes;
             let start = s.iter().position(|b| *b > 0x20).unwrap_or(s.len());
@@ -88,7 +98,6 @@ impl SaveStore {
             }
             &s[start..end]
         };
-
         let first = trimmed.first().copied().unwrap_or(0);
         let last = trimmed.last().copied().unwrap_or(0);
         let plausible = matches!((first, last), (b'{', b'}') | (b'[', b']') | (b'"', b'"'))
@@ -133,30 +142,10 @@ impl SaveStore {
             .unwrap_or(0)
     }
 
-    fn mtime(path: &Path) -> Option<u64> {
-        fs::metadata(path)
-            .and_then(|m| m.modified())
-            .ok()
-            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-            .map(|d| d.as_secs())
-    }
-
     fn should_rotate_bak(&self, bak_path: &Path) -> bool {
-        match Self::mtime(bak_path) {
+        match self.storage.mtime_secs(bak_path) {
             None => true,
             Some(mtime) => Self::now().saturating_sub(mtime) >= self.bak_min_age_secs,
-        }
-    }
-
-    fn sync_file(path: &Path) {
-        if let Ok(f) = fs::File::open(path) {
-            let _ = f.sync_all();
-        }
-    }
-
-    fn sync_dir(path: &Path) {
-        if let Ok(f) = fs::File::open(path) {
-            let _ = f.sync_all();
         }
     }
 
@@ -167,7 +156,6 @@ impl SaveStore {
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
-
         let base = format!(
             "corrupted_{}_{}_{}",
             Self::now_nanos(),
@@ -175,9 +163,8 @@ impl SaveStore {
             name
         );
         let mut dest = self.dir.join(&base);
-
         let mut counter = 0u32;
-        while dest.exists() {
+        while self.storage.exists(&dest) {
             counter += 1;
             dest = self.dir.join(format!(
                 "corrupted_{}_{}_{}_{}",
@@ -190,80 +177,87 @@ impl SaveStore {
                 return path.to_path_buf();
             }
         }
-        if fs::rename(path, &dest).is_err() {
-            if fs::copy(path, &dest).is_ok() {
-                let _ = fs::remove_file(path);
-                Self::sync_dir(&self.dir);
+        if self.storage.rename(path, &dest).is_err() {
+            if self.storage.copy(path, &dest).is_ok() {
+                let _ = self.storage.remove_file(path);
+                self.storage.sync_dir(&self.dir);
                 return dest;
             }
             return path.to_path_buf();
         }
-        Self::sync_dir(&self.dir);
+        self.storage.sync_dir(&self.dir);
         dest
     }
 
     /// Serialize `data` to a temp file, then atomically swap it into place, rotating a
     /// `.bak` on a throttle.
     pub fn write(&self, data: &[u8]) -> Result<(), String> {
-        fs::create_dir_all(&self.dir).map_err(|e| e.to_string())?;
+        self.storage
+            .create_dir_all(&self.dir)
+            .map_err(|e| e.to_string())?;
         let target_path = self.path();
         let temp_path = self.temp_path();
         let bak_path = self.bak_path();
 
-        if temp_path.exists() {
+        if self.storage.exists(&temp_path) {
             self.quarantine_corrupt_file(&temp_path);
         }
 
-        fs::write(&temp_path, data).map_err(|e| e.to_string())?;
-        Self::sync_file(&temp_path);
-        Self::sync_dir(&self.dir);
+        self.storage
+            .write(&temp_path, data)
+            .map_err(|e| e.to_string())?;
+        self.storage.sync_file(&temp_path);
+        self.storage.sync_dir(&self.dir);
 
-        if target_path.exists() {
-            let target_intact = Self::read_all(&target_path)
+        if self.storage.exists(&target_path) {
+            let target_intact = self
+                .storage
+                .read(&target_path)
                 .ok()
                 .flatten()
                 .is_some_and(|b| (self.validate)(&b));
             if !target_intact {
                 self.quarantine_corrupt_file(&target_path);
             } else if self.should_rotate_bak(&bak_path) {
-                // Best-effort rotate; on Windows rename-over may need remove first.
-                if fs::rename(&target_path, &bak_path).is_err() {
-                    let _ = fs::remove_file(&bak_path);
-                    if fs::rename(&target_path, &bak_path).is_err() {
-                        if fs::copy(&target_path, &bak_path).is_ok() {
-                            let _ = fs::remove_file(&target_path);
-                            Self::sync_file(&bak_path);
-                            Self::sync_dir(&self.dir);
+                if self.storage.rename(&target_path, &bak_path).is_err() {
+                    let _ = self.storage.remove_file(&bak_path);
+                    if self.storage.rename(&target_path, &bak_path).is_err() {
+                        if self.storage.copy(&target_path, &bak_path).is_ok() {
+                            let _ = self.storage.remove_file(&target_path);
+                            self.storage.sync_file(&bak_path);
+                            self.storage.sync_dir(&self.dir);
                         } else {
                         }
                     } else {
-                        Self::sync_dir(&self.dir);
+                        self.storage.sync_dir(&self.dir);
                     }
                 } else {
-                    Self::sync_dir(&self.dir);
+                    self.storage.sync_dir(&self.dir);
                 }
             } else {
-                fs::remove_file(&target_path).map_err(|e| e.to_string())?;
+                self.storage
+                    .remove_file(&target_path)
+                    .map_err(|e| e.to_string())?;
             }
         }
 
-        match fs::rename(&temp_path, &target_path) {
+        match self.storage.rename(&temp_path, &target_path) {
             Ok(()) => {
-                Self::sync_dir(&self.dir);
+                self.storage.sync_dir(&self.dir);
                 Ok(())
             }
             Err(first_err) => {
-                let _ = fs::remove_file(&target_path);
-                if fs::rename(&temp_path, &target_path).is_ok() {
-                    Self::sync_dir(&self.dir);
+                let _ = self.storage.remove_file(&target_path);
+                if self.storage.rename(&temp_path, &target_path).is_ok() {
+                    self.storage.sync_dir(&self.dir);
                     return Ok(());
                 }
-                // Last resort: plain write (still success if it lands).
-                fs::write(&target_path, data).map_err(|e| e.to_string())?;
-                Self::sync_file(&target_path);
-                Self::sync_dir(&self.dir);
-                let _ = fs::remove_file(&temp_path);
-                // Data is on disk; don't fail the save.
+                self.storage
+                    .write(&target_path, data)
+                    .map_err(|e| e.to_string())?;
+                self.storage.sync_file(&target_path);
+                self.storage.sync_dir(&self.dir);
+                let _ = self.storage.remove_file(&temp_path);
                 let _ = first_err;
                 Ok(())
             }
@@ -284,11 +278,10 @@ impl SaveStore {
         extra_corrupt_fallbacks: &[PathBuf],
     ) -> LoadResult {
         let target_path = self.path();
-        let target_read = Self::read_all(&target_path);
+        let target_read = self.storage.read(&target_path);
 
         let parsed = match target_read {
-            Err(_io) if target_path.exists() => {
-                // If it exists but unreadable (lock/AV)
+            Err(_io) if self.storage.exists(&target_path) => {
                 return LoadResult {
                     data: None,
                     status: LoadStatus::Unreadable,
@@ -320,7 +313,7 @@ impl SaveStore {
             if fallback == target_path {
                 continue;
             }
-            let Ok(Some(bytes)) = Self::read_all(&fallback) else {
+            let Ok(Some(bytes)) = self.storage.read(&fallback) else {
                 continue;
             };
             if validate(&bytes) {
@@ -343,37 +336,30 @@ impl SaveStore {
     /// use this, or load recovery would resurrect the file from its leftover backup.
     pub fn delete(&self) {
         for p in [self.path(), self.bak_path(), self.temp_path()] {
-            if p.exists() {
-                let _ = fs::remove_file(p);
+            if self.storage.exists(&p) {
+                let _ = self.storage.remove_file(&p);
             }
         }
-        Self::sync_dir(&self.dir);
+        self.storage.sync_dir(&self.dir);
     }
 
     pub fn exists(&self) -> bool {
-        self.path().exists()
-    }
-
-    /// `Ok(None)` = missing, `Err` = IO failure on an existing path, `Ok(Some)` = bytes.
-    fn read_all(path: &Path) -> Result<Option<Vec<u8>>, std::io::Error> {
-        match fs::read(path) {
-            Ok(b) => Ok(Some(b)),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(e),
-        }
+        self.storage.exists(&self.path())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::MemoryStorage;
+    use std::fs;
 
     fn tmp_dir(tag: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
             "game_utils_savestore_{}_{}_{}",
             tag,
             std::process::id(),
-            SaveStore::now_nanos()
+            SaveStore::<FsStorage>::now_nanos()
         ));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
@@ -381,7 +367,7 @@ mod tests {
     }
 
     fn validate_json(bytes: &[u8]) -> bool {
-        SaveStore::is_intact_json(bytes)
+        SaveStore::<FsStorage>::is_intact_json(bytes)
     }
 
     #[test]
@@ -414,17 +400,13 @@ mod tests {
         let target = store.path();
         let bak = store.bak_path();
         fs::copy(&target, &bak).unwrap();
-
         store.write(b"{ \"good\": 2 }").unwrap();
-
         fs::write(&target, b"garbage").unwrap();
         let res = store.load(&validate_json, &[]);
         assert_eq!(res.status, LoadStatus::Corrupt);
-
         assert!(res.data.is_some());
         assert!(validate_json(res.data.as_deref().unwrap()));
         assert!(res.recovered_from.is_some());
-
         assert!(validate_json(&fs::read(&target).unwrap()));
         store.delete();
         let _ = fs::remove_dir_all(&dir);
@@ -494,10 +476,8 @@ mod tests {
         let dir = tmp_dir("throttle");
         let store = SaveStore::new(&dir, "save.json");
         store.write(b"{ \"v\": 1 }").unwrap();
-        // Simulate a fresh .bak just written.
         fs::copy(store.path(), store.bak_path()).unwrap();
         store.write(b"{ \"v\": 2 }").unwrap();
-        // The recent .bak stays: target is deleted, no new rotation.
         assert_eq!(
             fs::read(store.bak_path()).unwrap(),
             b"{ \"v\": 1 }".to_vec()
@@ -508,20 +488,19 @@ mod tests {
 
     #[test]
     fn is_intact_json_rejects_garbage_braces() {
-        assert!(!SaveStore::is_intact_json(b"{garbage}}"));
-        assert!(!SaveStore::is_intact_json(b"{ \"a\": 1 } trailing"));
-        assert!(SaveStore::is_intact_json(b"{\"a\":1}"));
-        assert!(SaveStore::is_intact_json(b"  {\"a\": 1}  \n"));
-        assert!(SaveStore::is_intact_json(b"[1,2,3]"));
-        assert!(!SaveStore::is_intact_json(b""));
-        assert!(!SaveStore::is_intact_json(b"   "));
+        assert!(!SaveStore::<FsStorage>::is_intact_json(b"{garbage}}"));
+        assert!(!SaveStore::<FsStorage>::is_intact_json(b"{ \"a\": 1 } trailing"));
+        assert!(SaveStore::<FsStorage>::is_intact_json(b"{\"a\":1}"));
+        assert!(SaveStore::<FsStorage>::is_intact_json(b"  {\"a\": 1}  \n"));
+        assert!(SaveStore::<FsStorage>::is_intact_json(b"[1,2,3]"));
+        assert!(!SaveStore::<FsStorage>::is_intact_json(b""));
+        assert!(!SaveStore::<FsStorage>::is_intact_json(b"   "));
     }
 
     #[test]
     fn quarantine_no_collision_same_second() {
         let dir = tmp_dir("quarantine_collision");
         let store = SaveStore::new(&dir, "save.json");
-
         let p1 = dir.join("a.json");
         let p2 = dir.join("b.json");
         fs::write(&p1, b"x").unwrap();
@@ -532,5 +511,20 @@ mod tests {
         assert!(q1.exists());
         assert!(q2.exists());
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn memory_storage_roundtrip() {
+        let mem = MemoryStorage::new();
+        let store = SaveStore::new_with_storage("/tmp/mem_a", "save.json", mem);
+        store.write(b"{ \"a\": 1 }").unwrap();
+        let res = store.load(&validate_json, &[]);
+        assert_eq!(res.status, LoadStatus::Ok);
+        assert_eq!(res.data.as_deref(), Some(b"{ \"a\": 1 }".as_slice()));
+        // Corrupt + recovery in memory should also work
+        store.storage().write(&store.path(), b"bad").unwrap();
+        let res2 = store.load(&validate_json, &[]);
+        // .bak holds previous good value
+        assert_eq!(res2.status, LoadStatus::Corrupt);
     }
 }

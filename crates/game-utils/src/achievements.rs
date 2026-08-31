@@ -1,4 +1,5 @@
 use crate::stats::{Aggregation, StatsStore, aggregate};
+use crate::typed_id::{AchievementId, StatId};
 use std::collections::HashSet;
 
 /// Storage backends an achievement persists to. The registry reconciles a "primary" saved
@@ -23,7 +24,7 @@ impl AchievementBackend for HashSet<String> {
 #[derive(Debug, Clone)]
 pub enum AchievementCondition {
     Stat {
-        stat_id: String,
+        stat_id: StatId,
         aggregation: Aggregation,
         threshold: f32,
         /// When true, evaluate against the global best across all categories.
@@ -33,7 +34,7 @@ pub enum AchievementCondition {
 
 impl AchievementCondition {
     pub fn stat(
-        stat_id: impl Into<String>,
+        stat_id: impl Into<StatId>,
         aggregation: Aggregation,
         threshold: f32,
         global: bool,
@@ -84,7 +85,7 @@ impl AchievementCondition {
 
 #[derive(Debug, Clone)]
 pub struct Achievement {
-    pub id: String,
+    pub id: AchievementId,
     pub title: String,
     pub description: String,
     pub condition: AchievementCondition,
@@ -92,7 +93,7 @@ pub struct Achievement {
 
 impl Achievement {
     pub fn new(
-        id: impl Into<String>,
+        id: impl Into<AchievementId>,
         title: impl Into<String>,
         description: impl Into<String>,
         condition: AchievementCondition,
@@ -111,7 +112,7 @@ impl Achievement {
 #[derive(Debug, Clone)]
 pub struct AchievementRegistry {
     pub achievements: Vec<Achievement>,
-    unlocked: HashSet<String>,
+    unlocked: HashSet<AchievementId>,
 }
 
 impl AchievementRegistry {
@@ -143,14 +144,14 @@ impl AchievementRegistry {
     }
 
     /// Scan stat achievements against the current stats; unlock any reached ones.
-    /// Returns the ids newly unlocked by this call.
+    /// Returns the ids newly unlocked by this call (typed `AchievementId` — keep Ron as string).
     pub fn update_from_stats(
         &mut self,
         store: &StatsStore,
         category: &str,
         saved: &mut impl AchievementBackend,
         external: &mut impl AchievementBackend,
-    ) -> Vec<String> {
+    ) -> Vec<AchievementId> {
         let mut unlocked_now = Vec::new();
         for a in &self.achievements {
             if self.unlocked.contains(&a.id) {
@@ -184,7 +185,7 @@ impl AchievementRegistry {
                 threshold,
                 global: cglobal,
             } => {
-                if cid != stat_id || cagg != &aggregation {
+                if cid.as_str() != stat_id || cagg != &aggregation {
                     return false;
                 }
                 let val = if *cglobal {
@@ -210,6 +211,9 @@ impl AchievementRegistry {
     }
 
     pub fn is_unlocked(&self, id: &str) -> bool {
+        self.unlocked.contains(id)
+    }
+    pub fn is_unlocked_typed(&self, id: &AchievementId) -> bool {
         self.unlocked.contains(id)
     }
 }
@@ -274,7 +278,7 @@ mod tests {
             ),
         ]);
         let new = reg.update_from_stats(&store, "stats0", &mut saved, &mut external);
-        assert_eq!(new, vec!["boss_1"]);
+        assert_eq!(new, vec![AchievementId::new("boss_1")]);
         assert!(saved.contains("boss_1"));
         assert!(external.contains("boss_1"));
         assert!(!reg.is_unlocked("boss_2"));

@@ -5,6 +5,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::save_store::{LoadStatus, SaveStore};
+use crate::storage::FsStorage;
 
 /// Implemented by save data types so the manager can stamp/roll the current version.
 pub trait Versioned {
@@ -62,8 +63,9 @@ impl SaveManager {
         self.data_dir().join(self.file_name)
     }
 
-    fn store(&self) -> SaveStore {
-        SaveStore::new(self.data_dir(), self.file_name).with_validator(SaveStore::is_intact_ron)
+    fn store(&self) -> SaveStore<FsStorage> {
+        SaveStore::new(self.data_dir(), self.file_name)
+            .with_validator(SaveStore::<FsStorage>::is_intact_ron)
     }
 
     pub fn save<T: Serialize>(&self, data: &T) -> Result<(), String> {
@@ -83,7 +85,7 @@ impl SaveManager {
     /// produced it.  Corrupt files are not silently replaced by `T::default()`.
     pub fn load_with_status<T: DeserializeOwned + Default + Versioned>(&self) -> (T, LoadStatus) {
         let store = self.store();
-        let res = store.load(&SaveStore::is_intact_ron, &[]);
+        let res = store.load(&SaveStore::<FsStorage>::is_intact_ron, &[]);
         let status = res.status;
         let Some(bytes) = res.data.as_deref() else {
             return (T::default(), status);
@@ -178,7 +180,8 @@ mod tests {
             current_version: 5,
         };
 
-        let store = SaveStore::new(&dir, "stamped.ron").with_validator(SaveStore::is_intact_ron);
+        let store = SaveStore::new(&dir, "stamped.ron")
+            .with_validator(SaveStore::<FsStorage>::is_intact_ron);
         let mut d = Dummy {
             version: 1,
             value: 7,
@@ -188,7 +191,13 @@ mod tests {
         let s = ron::ser::to_string_pretty(&d, Default::default()).unwrap();
         store.write(s.as_bytes()).unwrap();
         let loaded: Dummy = ron::from_str(
-            &String::from_utf8(store.load(&SaveStore::is_intact_ron, &[]).data.unwrap()).unwrap(),
+            &String::from_utf8(
+                store
+                    .load(&SaveStore::<FsStorage>::is_intact_ron, &[])
+                    .data
+                    .unwrap(),
+            )
+            .unwrap(),
         )
         .unwrap();
         assert_eq!(loaded.version, 5);

@@ -1,10 +1,11 @@
 use crate::stats::{Aggregation, StatsStore, aggregate};
+use crate::typed_id::StatId;
 
 /// Unlock condition gating on a stat's value against a threshold.
 #[derive(Debug, Clone)]
 pub struct UnlockCondition {
     /// Which stat id to read out of the [`StatsStore`].
-    pub stat_id: String,
+    pub stat_id: StatId,
     pub aggregation: Aggregation,
     pub threshold: f32,
     /// When true, evaluate against the global best across all categories; otherwise
@@ -15,7 +16,7 @@ pub struct UnlockCondition {
 
 impl UnlockCondition {
     pub fn new(
-        stat_id: impl Into<String>,
+        stat_id: impl Into<StatId>,
         aggregation: Aggregation,
         threshold: f32,
         global: bool,

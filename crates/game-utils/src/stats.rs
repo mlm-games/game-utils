@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use crate::typed_id::StatId;
+
 /// Aggregation mode for a [`Stat`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum Aggregation {
@@ -31,20 +33,25 @@ pub fn aggregate(agg: Aggregation, values: &[Option<f32>]) -> Option<f32> {
 }
 
 /// A tracked game stat with an aggregation mode and a current in-session value.
+/// `id` is a typed `StatId` (keeps Ron as plain string for compat with old saves).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Stat {
-    pub id: String,
+    pub id: StatId,
     pub aggregation: Aggregation,
     pub current: Option<f32>,
 }
 
 impl Stat {
-    pub fn new(id: impl Into<String>, aggregation: Aggregation) -> Self {
+    pub fn new(id: impl Into<StatId>, aggregation: Aggregation) -> Self {
         Self {
             id: id.into(),
             aggregation,
             current: None,
         }
+    }
+    /// Keep `String` compat: construct from raw string without importing `StatId`.
+    pub fn new_str(id: impl Into<String>, aggregation: Aggregation) -> Self {
+        Self::new(StatId::new(id.into()), aggregation)
     }
 
     /// Incorporate `value` into the current in-session aggregate. Returns whether the
@@ -72,15 +79,20 @@ impl Stat {
 }
 
 /// Holds the best value of every stat per category.
+/// Keeps Ron as ` { "stats0": { "boss": 3.0 } } ` — keys are plain strings via `StatId` transparent ser.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct StatsStore {
     /// category -> stat id -> best value
-    by_category: HashMap<String, HashMap<String, f32>>,
+    by_category: HashMap<String, HashMap<StatId, f32>>,
 }
 
 impl StatsStore {
-    /// Read the best persisted value of `stat` in `category`.
+    /// Read the best persisted value of `stat` in `category`. Accepts `&str` or `&StatId` via `Borrow`.
     pub fn best(&self, category: &str, stat_id: &str) -> Option<f32> {
+        self.by_category.get(category)?.get(stat_id).copied()
+    }
+    /// Typed variant.
+    pub fn best_typed(&self, category: &str, stat_id: &StatId) -> Option<f32> {
         self.by_category.get(category)?.get(stat_id).copied()
     }
 
@@ -106,14 +118,21 @@ impl StatsStore {
             .collect();
         aggregate(agg, &values)
     }
+    pub fn best_global_with_typed(&self, stat_id: &StatId, agg: Aggregation) -> Option<f32> {
+        self.best_global_with(stat_id.as_str(), agg)
+    }
 
     /// Global best using Max (legacy helper). Prefer [`Self::best_global_with`].
     pub fn best_global(&self, stat_id: &str) -> Option<f32> {
         self.best_global_with(stat_id, Aggregation::Max)
     }
 
-    pub fn category_iter(&self) -> impl Iterator<Item = (&str, &HashMap<String, f32>)> {
+    pub fn category_iter(&self) -> impl Iterator<Item = (&str, &HashMap<StatId, f32>)> {
         self.by_category.iter().map(|(c, m)| (c.as_str(), m))
+    }
+    /// Keep `String` key iter compat for old call sites.
+    pub fn category_iter_str_keys(&self) -> impl Iterator<Item = (&str, &HashMap<StatId, f32>)> {
+        self.category_iter()
     }
 }
 

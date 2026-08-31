@@ -16,6 +16,8 @@ use std::collections::{BTreeMap, btree_map};
 use serde::{Deserialize, Serialize};
 
 use crate::save_store::{LoadStatus, SaveStore};
+use crate::storage::FsStorage;
+use crate::typed_id::CodexId;
 
 /// Per-id metadata tracked by the ledger.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -38,23 +40,29 @@ impl CodexEntry {
     }
 }
 
-/// A discovery ledger keyed by stable string ids. Pure data: serialize it into a game save
-/// or persist it via [`CodexStore`].
+/// A discovery ledger keyed by stable typed ids. Pure data: serialize it into a game save
+/// or persist it via [`CodexStore`]. Keeps Ron as ` { "enemy_1": (... ) } ` via `CodexId` transparent ser.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct Codex {
-    pub entries: BTreeMap<String, CodexEntry>,
+    pub entries: BTreeMap<CodexId, CodexEntry>,
 }
 
 impl Codex {
-    /// Whether `id` has been discovered.
+    /// Whether `id` has been discovered. Accepts `&str` or `&CodexId` via `Borrow`.
     pub fn is_discovered(&self, id: &str) -> bool {
+        self.entries.get(id).is_some_and(|e| e.discovered)
+    }
+    pub fn is_discovered_typed(&self, id: &CodexId) -> bool {
         self.entries.get(id).is_some_and(|e| e.discovered)
     }
 
     /// Mark `id` discovered. Returns `true` if this changed its state (newly discovered).
     pub fn mark_discovered(&mut self, id: &str) -> bool {
         if !self.is_discovered(id) {
-            self.entries.entry(id.to_string()).or_default().discovered = true;
+            self.entries
+                .entry(CodexId::new(id))
+                .or_default()
+                .discovered = true;
             return true;
         }
         false
@@ -71,7 +79,7 @@ impl Codex {
         if !value.is_finite() {
             return false;
         }
-        let e = self.entries.entry(id.to_string()).or_default();
+        let e = self.entries.entry(CodexId::new(id)).or_default();
 
         if e.best.is_none_or(|b| !b.is_finite() || value > b) {
             e.best = Some(value);
@@ -87,14 +95,14 @@ impl Codex {
 
     /// Bump `id`'s counter by `by`. Returns the new count.
     pub fn increment_count(&mut self, id: &str, by: u64) -> u64 {
-        let e = self.entries.entry(id.to_string()).or_default();
+        let e = self.entries.entry(CodexId::new(id)).or_default();
         e.count = e.count.saturating_add(by);
         e.count
     }
 
     /// Set `id`'s counter exactly.
     pub fn set_count(&mut self, id: &str, count: u64) {
-        self.entries.entry(id.to_string()).or_default().count = count;
+        self.entries.entry(CodexId::new(id)).or_default().count = count;
     }
 
     /// The full entry for `id`.
@@ -104,11 +112,11 @@ impl Codex {
 
     /// Mutable entry for `id`, creating it if absent.
     pub fn entry_mut(&mut self, id: &str) -> &mut CodexEntry {
-        self.entries.entry(id.to_string()).or_default()
+        self.entries.entry(CodexId::new(id)).or_default()
     }
 
     /// Iterate over `(id, entry)` pairs.
-    pub fn iter(&self) -> btree_map::Iter<'_, String, CodexEntry> {
+    pub fn iter(&self) -> btree_map::Iter<'_, CodexId, CodexEntry> {
         self.entries.iter()
     }
 
@@ -154,16 +162,17 @@ fn codex_intact(bytes: &[u8]) -> bool {
 }
 
 /// A [`Codex`] persisted as a crash-safe RON file, built on [`crate::save_store::SaveStore`].
+/// Generic over `Storage` (keeps Ron codec).
 #[derive(Debug, Clone)]
-pub struct CodexStore {
-    store: SaveStore,
+pub struct CodexStore<S: crate::storage::Storage = FsStorage> {
+    store: SaveStore<S>,
     codex: Codex,
     loaded: bool,
     loaded_from: std::path::PathBuf,
 }
 
-impl CodexStore {
-    /// Create a store for `file_name` inside `dir`.
+impl CodexStore<FsStorage> {
+    /// Create a store for `file_name` inside `dir` (FsStorage).
     pub fn new(dir: impl Into<std::path::PathBuf>, file_name: impl Into<String>) -> Self {
         Self {
             store: SaveStore::new(dir, file_name).with_validator(codex_intact),
@@ -172,9 +181,24 @@ impl CodexStore {
             loaded_from: std::path::PathBuf::new(),
         }
     }
+}
+
+impl<S: crate::storage::Storage> CodexStore<S> {
+    pub fn new_with_storage(
+        dir: impl Into<std::path::PathBuf>,
+        file_name: impl Into<String>,
+        storage: S,
+    ) -> Self {
+        Self {
+            store: SaveStore::new_with_storage(dir, file_name, storage).with_validator(codex_intact),
+            codex: Codex::default(),
+            loaded: false,
+            loaded_from: std::path::PathBuf::new(),
+        }
+    }
 
     /// The underlying crash-safe store (exposes path/delete).
-    pub fn store(&self) -> &SaveStore {
+    pub fn store(&self) -> &SaveStore<S> {
         &self.store
     }
 
