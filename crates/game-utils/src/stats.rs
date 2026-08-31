@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::typed_id::StatId;
+use crate::typed_id::{CategoryId, StatId};
 
 /// Aggregation mode for a [`Stat`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -79,11 +79,11 @@ impl Stat {
 }
 
 /// Holds the best value of every stat per category.
-/// Keeps Ron as ` { "stats0": { "boss": 3.0 } } ` — keys are plain strings via `StatId` transparent ser.
+/// Keeps Ron as ` { "stats0": { "boss": 3.0 } } ` — keys are plain strings via `StatId`/`CategoryId` transparent ser.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct StatsStore {
     /// category -> stat id -> best value
-    by_category: HashMap<String, HashMap<StatId, f32>>,
+    by_category: HashMap<CategoryId, HashMap<StatId, f32>>,
 }
 
 impl StatsStore {
@@ -102,11 +102,15 @@ impl StatsStore {
         let best = stat.best_with(self.best(category, &stat.id));
         if let Some(b) = best {
             self.by_category
-                .entry(category.to_string())
+                .entry(CategoryId::new(category))
                 .or_default()
                 .insert(stat.id.clone(), b);
         }
         best
+    }
+    /// Typed category variant.
+    pub fn record_typed(&mut self, category: &CategoryId, stat: &Stat) -> Option<f32> {
+        self.record(category.as_str(), stat)
     }
 
     /// Global best across all categories for a stat id, under `agg`.
@@ -127,12 +131,16 @@ impl StatsStore {
         self.best_global_with(stat_id, Aggregation::Max)
     }
 
-    pub fn category_iter(&self) -> impl Iterator<Item = (&str, &HashMap<StatId, f32>)> {
+    pub fn category_iter(&self) -> impl Iterator<Item = (&CategoryId, &HashMap<StatId, f32>)> {
+        self.by_category.iter().map(|(c, m)| (c, m))
+    }
+    /// String-borrowed iter for compat (`&str` category).
+    pub fn category_iter_str(&self) -> impl Iterator<Item = (&str, &HashMap<StatId, f32>)> {
         self.by_category.iter().map(|(c, m)| (c.as_str(), m))
     }
     /// Keep `String` key iter compat for old call sites.
     pub fn category_iter_str_keys(&self) -> impl Iterator<Item = (&str, &HashMap<StatId, f32>)> {
-        self.category_iter()
+        self.category_iter_str()
     }
 }
 

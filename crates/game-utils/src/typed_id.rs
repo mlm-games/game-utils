@@ -19,6 +19,8 @@ pub struct CodexTag;
 pub struct AchievementTag;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct UnlockTag;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct CategoryTag;
 
 /// `Tag` is a zero-sized marker so `TypedId<StatTag>` and
 /// `TypedId<CodexTag>` are distinct types. Serializes as a plain string (Ron ` "kills" `)
@@ -172,6 +174,7 @@ pub type StatId = TypedId<StatTag>;
 pub type CodexId = TypedId<CodexTag>;
 pub type AchievementId = TypedId<AchievementTag>;
 pub type UnlockId = TypedId<UnlockTag>;
+pub type CategoryId = TypedId<CategoryTag>;
 
 #[cfg(test)]
 mod tests {

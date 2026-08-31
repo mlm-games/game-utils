@@ -5,7 +5,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::save_store::{LoadStatus, SaveStore};
-use crate::storage::FsStorage;
+use crate::storage::{FsStorage, Storage};
 
 /// Implemented by save data types so the manager can stamp/roll the current version.
 pub trait Versioned {
@@ -15,16 +15,18 @@ pub trait Versioned {
 }
 
 /// Bevy-agnostic save manager: serializes generic data to RON under a platform data dir.
+/// Generic over `Storage` (keeps Ron codec).
 #[derive(Clone)]
-pub struct SaveManager {
+pub struct SaveManager<S: Storage = FsStorage> {
     pub qualifier: &'static str,
     pub org: &'static str,
     pub app: &'static str,
     pub file_name: &'static str,
     pub current_version: u32,
+    storage: S,
 }
 
-impl SaveManager {
+impl SaveManager<FsStorage> {
     pub fn new(
         qualifier: &'static str,
         org: &'static str,
@@ -32,13 +34,31 @@ impl SaveManager {
         file_name: &'static str,
         current_version: u32,
     ) -> Self {
+        Self::new_with_storage(qualifier, org, app, file_name, current_version, FsStorage)
+    }
+}
+
+impl<S: Storage> SaveManager<S> {
+    pub fn new_with_storage(
+        qualifier: &'static str,
+        org: &'static str,
+        app: &'static str,
+        file_name: &'static str,
+        current_version: u32,
+        storage: S,
+    ) -> Self {
         Self {
             qualifier,
             org,
             app,
             file_name,
             current_version,
+            storage,
         }
+    }
+
+    pub fn storage(&self) -> &S {
+        &self.storage
     }
 
     /// Resolve the on-disk directory (creates it).  Falls back to a temp dir on
@@ -63,9 +83,9 @@ impl SaveManager {
         self.data_dir().join(self.file_name)
     }
 
-    fn store(&self) -> SaveStore<FsStorage> {
-        SaveStore::new(self.data_dir(), self.file_name)
-            .with_validator(SaveStore::<FsStorage>::is_intact_ron)
+    fn store(&self) -> SaveStore<S> {
+        SaveStore::new_with_storage(self.data_dir(), self.file_name, self.storage.clone())
+            .with_validator(SaveStore::<S>::is_intact_ron)
     }
 
     pub fn save<T: Serialize>(&self, data: &T) -> Result<(), String> {
@@ -85,7 +105,7 @@ impl SaveManager {
     /// produced it.  Corrupt files are not silently replaced by `T::default()`.
     pub fn load_with_status<T: DeserializeOwned + Default + Versioned>(&self) -> (T, LoadStatus) {
         let store = self.store();
-        let res = store.load(&SaveStore::<FsStorage>::is_intact_ron, &[]);
+        let res = store.load(&SaveStore::<S>::is_intact_ron, &[]);
         let status = res.status;
         let Some(bytes) = res.data.as_deref() else {
             return (T::default(), status);
@@ -172,13 +192,7 @@ mod tests {
     fn save_versioned_stamps_version() {
         let dir = std::env::temp_dir().join(format!("game_utils_save_test_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        let m = SaveManager {
-            qualifier: "com",
-            org: "testorg",
-            app: "testapp_save_rs2",
-            file_name: "stamped.ron",
-            current_version: 5,
-        };
+        let m = SaveManager::new("com", "testorg", "testapp_save_rs2", "stamped.ron", 5);
 
         let store = SaveStore::new(&dir, "stamped.ron")
             .with_validator(SaveStore::<FsStorage>::is_intact_ron);

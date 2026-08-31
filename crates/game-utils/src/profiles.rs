@@ -11,12 +11,12 @@
 //! (read [`ProfileManager::active_path`] after `switch_to`).
 
 use std::collections::BTreeMap;
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
 use crate::save_store::{LoadStatus, SaveStore};
+use crate::storage::{FsStorage, Storage};
 
 /// Default name of the pointer config file inside the base directory.
 pub const POINTER_FILE: &str = "profiles.ron";
@@ -105,8 +105,9 @@ fn ron_intact(bytes: &[u8]) -> bool {
 }
 
 /// Owns the active profile, per-profile paths, lifecycle, and legacy migration.
+/// Generic over `Storage` (keeps Ron codec).
 #[derive(Debug, Clone)]
-pub struct ProfileManager {
+pub struct ProfileManager<S: Storage = FsStorage> {
     base_dir: PathBuf,
     num_profiles: usize,
     /// Files that live per-profile. The first entry is also the probe used by
@@ -121,12 +122,24 @@ pub struct ProfileManager {
     legacy_fallback: bool,
     initialized: bool,
     flags: BTreeMap<String, bool>,
+    storage: S,
 }
 
-impl ProfileManager {
+impl ProfileManager<FsStorage> {
     /// Create an uninitialized manager. Call [`Self::init`] (idempotent) before resolving
     /// paths; it self-initializes exactly like the source game's lazy static logic.
     pub fn new(base_dir: impl Into<PathBuf>, num_profiles: usize, legacy_files: &[&str]) -> Self {
+        Self::new_with_storage(base_dir, num_profiles, legacy_files, FsStorage)
+    }
+}
+
+impl<S: Storage> ProfileManager<S> {
+    pub fn new_with_storage(
+        base_dir: impl Into<PathBuf>,
+        num_profiles: usize,
+        legacy_files: &[&str],
+        storage: S,
+    ) -> Self {
         Self {
             base_dir: base_dir.into(),
             num_profiles: num_profiles.max(1),
@@ -138,6 +151,7 @@ impl ProfileManager {
             legacy_fallback: false,
             initialized: false,
             flags: BTreeMap::new(),
+            storage,
         }
     }
 
@@ -147,21 +161,24 @@ impl ProfileManager {
         self
     }
 
+    pub fn storage(&self) -> &S {
+        &self.storage
+    }
+
     /// Load the pointer config, run migration, and ensure the active profile dir exists.
     /// Idempotent. On failure, leaves the manager uninitialized so a later call can retry.
     pub fn init(&mut self) -> Result<(), ProfileError> {
         if self.initialized {
             return Ok(());
         }
-        // Do NOT mark initialized until the whole path succeeds.
         self.load_pointer();
-
         let active = self.active.clamp(1, self.num_profiles);
         if self.active != active {
             self.active = active;
         }
         self.migrate_if_needed()?;
-        fs::create_dir_all(self.profile_dir(self.active))?;
+        self.storage
+            .create_dir_all(&self.profile_dir(self.active))?;
         if self.fallback_path_none_left() || self.migrated {
             self.legacy_fallback = false;
         }
@@ -170,13 +187,13 @@ impl ProfileManager {
     }
 
     fn fallback_path_none_left(&self) -> bool {
-        // A failed migration leaves the real save in the root; once profile_1 exists the
-        // fallback is obsolete.
-        self.profile_dir(1).join(self.probe_file()).exists()
+        self.storage
+            .exists(&self.profile_dir(1).join(self.probe_file()))
     }
 
-    fn pointer_store(&self) -> SaveStore {
-        SaveStore::new(&self.base_dir, POINTER_FILE).with_validator(ron_intact)
+    fn pointer_store(&self) -> SaveStore<S> {
+        SaveStore::new_with_storage(&self.base_dir, POINTER_FILE, self.storage.clone())
+            .with_validator(ron_intact)
     }
 
     fn load_pointer(&mut self) {
@@ -191,8 +208,6 @@ impl ProfileManager {
             self.migrated_legacy = cfg.migrated_legacy;
             self.flags = cfg.flags;
         }
-        // Missing / corrupt / unreadable: fall back to defaults. A corrupt pointer is
-        // quarantined by the store; a missing one on first boot is expected.
     }
 
     fn persist_pointer(&mut self) -> Result<(), ProfileError> {
@@ -268,24 +283,24 @@ impl ProfileManager {
     pub fn profile_exists(&self, idx: usize) -> bool {
         let probe = self.probe_file();
         if probe.is_empty() {
-            return self.profile_dir(idx).is_dir();
+            return self.storage.is_dir(&self.profile_dir(idx));
         }
-        self.profile_path(probe, idx).is_file()
+        self.storage.is_file(&self.profile_path(probe, idx))
     }
 
     /// Copy one file to another, creating the destination parent dir.
     pub fn copy_file(&self, src: &Path, dst: &Path) -> Result<(), ProfileError> {
         if let Some(parent) = dst.parent() {
-            fs::create_dir_all(parent)?;
+            self.storage.create_dir_all(parent)?;
         }
-        fs::copy(src, dst)?;
+        self.storage.copy(src, dst)?;
         Ok(())
     }
 
     /// Removes a directory tree recursively.
     pub fn remove_dir_recursive(&self, path: &Path) -> Result<(), ProfileError> {
-        if path.exists() {
-            fs::remove_dir_all(path)?;
+        if self.storage.exists(path) {
+            self.storage.remove_dir_all(path)?;
         }
         Ok(())
     }
@@ -297,8 +312,6 @@ impl ProfileManager {
     pub fn switch_to(&mut self, idx: usize) -> Result<(), ProfileError> {
         let idx = idx.clamp(1, self.num_profiles);
         if !self.migrated {
-            // A failed boot migration left the real save at the root files. Retry it
-            // instead of force-flipping the flag.
             self.migrate_if_needed()?;
         }
         if self.migrated {
@@ -306,14 +319,14 @@ impl ProfileManager {
         }
         self.active = idx;
         self.persist_pointer()?;
-        fs::create_dir_all(self.profile_dir(self.active))?;
+        self.storage.create_dir_all(&self.profile_dir(self.active))?;
         Ok(())
     }
 
     /// Ensure a profile directory exists (fresh profile).
     pub fn create_profile(&self, idx: usize) -> Result<(), ProfileError> {
         let idx = idx.clamp(1, self.num_profiles);
-        fs::create_dir_all(self.profile_dir(idx))?;
+        self.storage.create_dir_all(&self.profile_dir(idx))?;
         Ok(())
     }
 
@@ -323,17 +336,16 @@ impl ProfileManager {
     pub fn clear_profile(&self, idx: usize) -> Result<Option<PathBuf>, ProfileError> {
         let idx = idx.clamp(1, self.num_profiles);
         let dir = self.profile_dir(idx);
-        if !dir.is_dir() {
+        if !self.storage.is_dir(&dir) {
             return Ok(None);
         }
-        fs::create_dir_all(self.backup_dir())?;
+        self.storage.create_dir_all(&self.backup_dir())?;
         let stamp = unix_now_nanos();
         let mut dest = self
             .backup_dir()
             .join(format!("{CLEARED_PREFIX}{idx}_{stamp}"));
-
         let mut ctr = 0u32;
-        while dest.exists() {
+        while self.storage.exists(&dest) {
             ctr += 1;
             dest = self
                 .backup_dir()
@@ -344,10 +356,10 @@ impl ProfileManager {
                 )));
             }
         }
-        if let Err(e) = fs::rename(&dir, &dest) {
+        if let Err(e) = self.storage.rename(&dir, &dest) {
             if e.kind() == std::io::ErrorKind::CrossesDevices || e.raw_os_error() == Some(18) {
-                copy_dir_recursive(&dir, &dest)?;
-                fs::remove_dir_all(&dir)?;
+                copy_dir_recursive(&self.storage, &dir, &dest)?;
+                self.storage.remove_dir_all(&dir)?;
             } else {
                 return Err(e.into());
             }
@@ -362,31 +374,28 @@ impl ProfileManager {
 
     /// Prune cleared-profile archives down to `max_cleared_archives`, oldest first.
     pub fn prune_cleared_archives(&self) -> Result<(), ProfileError> {
-        let Some(entries) = fs::read_dir(self.backup_dir()).ok() else {
-            return Ok(());
+        let entries = match self.storage.read_dir(&self.backup_dir()) {
+            Ok(v) => v,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => return Err(e.into()),
         };
         let mut archives: Vec<(PathBuf, u64)> = entries
-            .flatten()
-            .filter(|e| {
-                e.file_type().map(|t| t.is_dir()).unwrap_or(false)
-                    && e.file_name().to_string_lossy().starts_with(CLEARED_PREFIX)
+            .into_iter()
+            .filter(|p| {
+                self.storage.is_dir(p)
+                    && p.file_name()
+                        .and_then(|n| n.to_str())
+                        .is_some_and(|n| n.starts_with(CLEARED_PREFIX))
             })
-            .map(|e| {
-                let p = e.path();
-                let mtime = fs::metadata(&p)
-                    .and_then(|m| m.modified())
-                    .ok()
-                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                    .map(|d| d.as_secs())
-                    .unwrap_or(0);
+            .map(|p| {
+                let mtime = self.storage.mtime_secs(&p).unwrap_or(0);
                 (p, mtime)
             })
             .collect();
-
         archives.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
         while archives.len() > self.max_cleared_archives {
             let (oldest, _) = archives.remove(0);
-            let _ = fs::remove_dir_all(oldest);
+            let _ = self.storage.remove_dir_all(&oldest);
         }
         Ok(())
     }
@@ -397,27 +406,22 @@ impl ProfileManager {
         }
         let probe = self.probe_file();
         if probe.is_empty() {
-            // Nothing is configured to migrate; treat as migrated.
             self.migrated = true;
             self.migrated_legacy = false;
             return self.persist_pointer();
         }
-        // If profile_1 already has a save, migration ran on a previous boot and the flag
-        // was simply lost - adopt it. NEVER re-run: the atomic rename onto the existing
-        // profile_1 would fail and drop us into legacy-fallback (cross-profile corruption).
-        if self.profile_dir(1).join(probe).exists() {
+        if self.storage.exists(&self.profile_dir(1).join(probe)) {
             self.migrated = true;
-            self.migrated_legacy = true; // a pre-existing profile_1 means data carried over before
+            self.migrated_legacy = true;
             return self.persist_pointer();
         }
         let legacy: Vec<String> = self
             .legacy_files
             .iter()
-            .filter(|f| self.base_dir.join(f).is_file())
+            .filter(|f| self.storage.is_file(&self.base_dir.join(f)))
             .cloned()
             .collect();
         if legacy.is_empty() {
-            // Fresh install: nothing to migrate, no demo carry-over.
             self.migrated = true;
             self.migrated_legacy = false;
             return self.persist_pointer();
@@ -426,69 +430,61 @@ impl ProfileManager {
     }
 
     fn run_migration(&mut self, legacy: &[String]) -> Result<(), ProfileError> {
-        // 1) Untouched backup first.
         let backup = self.backup_dir().join(PRE_MIGRATION_BACKUP_DIR);
-        fs::create_dir_all(&backup)?;
+        self.storage.create_dir_all(&backup)?;
         for f in legacy {
-            let _ = fs::copy(self.base_dir.join(f), backup.join(f));
+            let _ = self
+                .storage
+                .copy(&self.base_dir.join(f), &backup.join(f));
         }
-
-        // 2) Stage copies under a temporary name; verify each.
         let staging = self.base_dir.join("profile_1_migrating");
-        let _ = fs::remove_dir_all(&staging);
-        fs::create_dir_all(&staging)?;
+        let _ = self.storage.remove_dir_all(&staging);
+        self.storage.create_dir_all(&staging)?;
         for f in legacy {
             let src = self.base_dir.join(f);
             let dst = staging.join(f);
-            if let Err(e) = fs::copy(&src, &dst) {
-                let _ = fs::remove_dir_all(&staging);
+            if let Err(e) = self.storage.copy(&src, &dst) {
+                let _ = self.storage.remove_dir_all(&staging);
                 self.legacy_fallback = true;
                 return Err(ProfileError::Io(e));
             }
             if !self.verify_copy(&src, &dst) {
-                let _ = fs::remove_dir_all(&staging);
+                let _ = self.storage.remove_dir_all(&staging);
                 self.legacy_fallback = true;
                 return Err(ProfileError::MigrationFailed("copy/verify"));
             }
         }
-
-        // 3) Atomic commit: a single directory rename. A prior failed boot may have left an
-        //    empty profile_1 behind (Windows can't rename over an existing dir). It can only
-        //    be stale here - any profile_1 containing the probe file was adopted above - so
-        //    clear it before renaming.
         let profile_1 = self.profile_dir(1);
         let probe = self.probe_file();
-        if profile_1.is_dir() && !profile_1.join(probe).exists() {
-            let _ = fs::remove_dir_all(&profile_1);
+        if self.storage.is_dir(&profile_1) && !self.storage.exists(&profile_1.join(probe)) {
+            let _ = self.storage.remove_dir_all(&profile_1);
         }
-        if let Err(e) = fs::rename(&staging, &profile_1) {
+        if let Err(e) = self.storage.rename(&staging, &profile_1) {
             if e.kind() == std::io::ErrorKind::CrossesDevices || e.raw_os_error() == Some(18) {
-                if let Err(copy_err) = copy_dir_recursive(&staging, &profile_1) {
-                    let _ = fs::remove_dir_all(&staging);
+                if let Err(copy_err) = copy_dir_recursive(&self.storage, &staging, &profile_1) {
+                    let _ = self.storage.remove_dir_all(&staging);
                     self.legacy_fallback = true;
                     return Err(ProfileError::Io(copy_err));
                 }
-                let _ = fs::remove_dir_all(&staging);
+                let _ = self.storage.remove_dir_all(&staging);
             } else {
-                let _ = fs::remove_dir_all(&staging);
+                let _ = self.storage.remove_dir_all(&staging);
                 self.legacy_fallback = true;
                 return Err(ProfileError::Io(e));
             }
         }
-
         self.migrated = true;
         self.migrated_legacy = true;
         self.persist_pointer()
     }
 
     fn verify_copy(&self, src: &Path, dst: &Path) -> bool {
-        let ok_src = fs::metadata(src).map(|m| m.len()).unwrap_or(0);
-        let ok_dst = fs::metadata(dst).map(|m| m.len()).unwrap_or(0);
+        let ok_src = self.storage.metadata_len(src).unwrap_or(0);
+        let ok_dst = self.storage.metadata_len(dst).unwrap_or(0);
         if ok_src == 0 || ok_src != ok_dst {
             return false;
         }
-
-        if let (Ok(a), Ok(b)) = (fs::read(src), fs::read(dst)) {
+        if let (Ok(Some(a)), Ok(Some(b))) = (self.storage.read(src), self.storage.read(dst)) {
             if a != b {
                 return false;
             }
@@ -496,8 +492,11 @@ impl ProfileManager {
             return false;
         }
         if dst.extension().and_then(|e| e.to_str()) == Some("ron") {
-            let bytes = fs::read(dst).unwrap_or_default();
-            if !ron_intact(&bytes) {
+            if let Ok(Some(bytes)) = self.storage.read(dst) {
+                if !ron_intact(&bytes) {
+                    return false;
+                }
+            } else {
                 return false;
             }
         }
@@ -524,16 +523,15 @@ fn unix_now_nanos() -> u128 {
         .unwrap_or(0)
 }
 
-fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
-    fs::create_dir_all(dst)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let ty = entry.file_type()?;
-        let dst_path = dst.join(entry.file_name());
-        if ty.is_dir() {
-            copy_dir_recursive(&entry.path(), &dst_path)?;
+fn copy_dir_recursive<S: Storage>(storage: &S, src: &Path, dst: &Path) -> std::io::Result<()> {
+    storage.create_dir_all(dst)?;
+    let entries = storage.read_dir(src)?;
+    for entry_path in entries {
+        let dst_path = dst.join(entry_path.file_name().unwrap());
+        if storage.is_dir(&entry_path) {
+            copy_dir_recursive(storage, &entry_path, &dst_path)?;
         } else {
-            fs::copy(entry.path(), &dst_path)?;
+            storage.copy(&entry_path, &dst_path)?;
         }
     }
     Ok(())
@@ -542,6 +540,7 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     fn tmp_root(tag: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -582,16 +581,13 @@ mod tests {
         assert!(pm.had_legacy_migration());
         assert!(pm.profile_path("save.ron", 1).is_file(), "save migrated");
         assert!(pm.profile_path("run_save.ron", 1).is_file());
-        // Originals kept as a second backup.
         assert!(root.join("save.ron").is_file());
-        // Backup copy under backups/pre_profiles.
         assert!(
             root.join(BACKUP_DIR)
                 .join(PRE_MIGRATION_BACKUP_DIR)
                 .join("save.ron")
                 .is_file()
         );
-        // Re-init is a no-op.
         let mut pm2 = ProfileManager::new(&root, 3, &["save.ron"]);
         pm2.init().unwrap();
         assert!(pm2.had_legacy_migration());
@@ -655,7 +651,6 @@ mod tests {
         pm.init().unwrap();
         assert_eq!(pm.active(), 1);
         assert!(!pm.had_legacy_migration());
-        // The corrupt pointer was quarantined aside, not deleted.
         let corrupted: Vec<_> = fs::read_dir(&root)
             .unwrap()
             .flatten()
@@ -663,5 +658,28 @@ mod tests {
             .collect();
         assert!(!corrupted.is_empty());
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn memory_storage_profile_roundtrip() {
+        use crate::storage::MemoryStorage;
+        let mem = MemoryStorage::new();
+        let mut pm = ProfileManager::new_with_storage(
+            PathBuf::from("/tmp/mem_profiles"),
+            3,
+            &["save.ron"],
+            mem.clone(),
+        );
+        pm.init().unwrap();
+        assert_eq!(pm.active(), 1);
+        pm.set_flag("seen", true).unwrap();
+        let mut pm2 = ProfileManager::new_with_storage(
+            PathBuf::from("/tmp/mem_profiles"),
+            3,
+            &["save.ron"],
+            mem,
+        );
+        pm2.init().unwrap();
+        assert!(pm2.get_flag("seen"));
     }
 }

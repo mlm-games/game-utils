@@ -326,6 +326,86 @@ impl Storage for MemoryStorage {
     fn sync_dir(&self, _path: &Path) {}
 }
 
+/// Simple XOR decorator over any `Storage`. Keeps Ron codec: `write` encrypts Ron bytes,
+/// `read` decrypts.
+#[derive(Debug, Clone)]
+pub struct EncryptedStorage<S: Storage> {
+    inner: S,
+    key: Vec<u8>,
+}
+
+impl<S: Storage> EncryptedStorage<S> {
+    pub fn new(inner: S, key: impl Into<Vec<u8>>) -> Self {
+        Self {
+            inner,
+            key: key.into(),
+        }
+    }
+    pub fn inner(&self) -> &S {
+        &self.inner
+    }
+    fn xor(&self, data: &[u8]) -> Vec<u8> {
+        if self.key.is_empty() {
+            return data.to_vec();
+        }
+        data.iter()
+            .enumerate()
+            .map(|(i, b)| b ^ self.key[i % self.key.len()])
+            .collect()
+    }
+}
+
+impl<S: Storage> Storage for EncryptedStorage<S> {
+    fn create_dir_all(&self, path: &Path) -> io::Result<()> {
+        self.inner.create_dir_all(path)
+    }
+    fn read(&self, path: &Path) -> io::Result<Option<Vec<u8>>> {
+        match self.inner.read(path)? {
+            Some(v) => Ok(Some(self.xor(&v))),
+            None => Ok(None),
+        }
+    }
+    fn write(&self, path: &Path, data: &[u8]) -> io::Result<()> {
+        self.inner.write(path, &self.xor(data))
+    }
+    fn rename(&self, from: &Path, to: &Path) -> io::Result<()> {
+        self.inner.rename(from, to)
+    }
+    fn copy(&self, from: &Path, to: &Path) -> io::Result<u64> {
+        self.inner.copy(from, to)
+    }
+    fn remove_file(&self, path: &Path) -> io::Result<()> {
+        self.inner.remove_file(path)
+    }
+    fn remove_dir_all(&self, path: &Path) -> io::Result<()> {
+        self.inner.remove_dir_all(path)
+    }
+    fn exists(&self, path: &Path) -> bool {
+        self.inner.exists(path)
+    }
+    fn is_dir(&self, path: &Path) -> bool {
+        self.inner.is_dir(path)
+    }
+    fn is_file(&self, path: &Path) -> bool {
+        self.inner.is_file(path)
+    }
+    fn metadata_len(&self, path: &Path) -> Option<u64> {
+        self.inner.metadata_len(path)
+    }
+    fn mtime_secs(&self, path: &Path) -> Option<u64> {
+        self.inner.mtime_secs(path)
+    }
+    fn read_dir(&self, path: &Path) -> io::Result<Vec<PathBuf>> {
+        self.inner.read_dir(path)
+    }
+    fn sync_file(&self, path: &Path) {
+        self.inner.sync_file(path)
+    }
+    fn sync_dir(&self, path: &Path) {
+        self.inner.sync_dir(path)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

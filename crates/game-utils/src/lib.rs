@@ -11,5 +11,5 @@ pub mod typed_id;
 pub mod unlock;
 pub mod weighted;
 
-pub use storage::{FsStorage, MemoryStorage, Storage};
-pub use typed_id::{AchievementId, CodexId, StatId, TypedId, UnlockId};
+pub use storage::{EncryptedStorage, FsStorage, MemoryStorage, Storage};
+pub use typed_id::{AchievementId, CategoryId, CodexId, StatId, TypedId, UnlockId};
