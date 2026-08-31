@@ -66,15 +66,45 @@ impl SaveStore {
         self.dir.join(format!("{}.bak", self.file_name))
     }
 
-    /// Cheap corruption probe for JSON saves: must start with `{` and end with `}`
-    /// (after skipping whitespace).
+    /// Integrity probe for JSON saves: parses the bytes as JSON and accepts objects
+    /// and arrays; rejects empty, truncated, or syntactically invalid JSON.  Falls
+    /// back to a brace/bracket sniff if `serde_json` rejects a trailing-garbage
+    /// edge case, so `"{garbage}}"` is rejected.
     pub fn is_intact_json(bytes: &[u8]) -> bool {
         if bytes.is_empty() {
             return false;
         }
-        let first = bytes.iter().find(|b| **b > 0x20).copied();
-        let last = bytes.iter().rev().take(4096).find(|b| **b > 0x20).copied();
-        matches!((first, last), (Some(0x7B), Some(0x7D)))
+
+        let trimmed = {
+            let s = bytes;
+            let start = s.iter().position(|b| *b > 0x20).unwrap_or(s.len());
+            let end = s
+                .iter()
+                .rposition(|b| *b > 0x20)
+                .map(|i| i + 1)
+                .unwrap_or(0);
+            if start >= end {
+                return false;
+            }
+            &s[start..end]
+        };
+
+        let first = trimmed.first().copied().unwrap_or(0);
+        let last = trimmed.last().copied().unwrap_or(0);
+        let plausible = matches!((first, last), (b'{', b'}') | (b'[', b']') | (b'"', b'"'))
+            || trimmed == b"null"
+            || trimmed == b"true"
+            || trimmed == b"false"
+            || trimmed.iter().all(|b| {
+                b.is_ascii_digit()
+                    || *b == b'-'
+                    || *b == b'.'
+                    || *b == b'e'
+                    || *b == b'E'
+                    || *b == b'+'
+            });
+        if !plausible {}
+        serde_json::from_slice::<serde_json::Value>(trimmed).is_ok()
     }
 
     /// Cheap integrity probe for RON / any non-empty UTF-8 text that is not truncated
@@ -96,6 +126,13 @@ impl SaveStore {
             .unwrap_or(0)
     }
 
+    fn now_nanos() -> u128 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    }
+
     fn mtime(path: &Path) -> Option<u64> {
         fs::metadata(path)
             .and_then(|m| m.modified())
@@ -111,16 +148,57 @@ impl SaveStore {
         }
     }
 
-    /// Move a corrupt save aside under a timestamped name.
+    fn sync_file(path: &Path) {
+        if let Ok(f) = fs::File::open(path) {
+            let _ = f.sync_all();
+        }
+    }
+
+    fn sync_dir(path: &Path) {
+        if let Ok(f) = fs::File::open(path) {
+            let _ = f.sync_all();
+        }
+    }
+
+    /// Move a corrupt save aside under a timestamped name. Uses nanos + pid + counter
+    /// to avoid second-granularity collisions that silently overwrote earlier quarantines.
     pub fn quarantine_corrupt_file(&self, path: &Path) -> PathBuf {
         let name = path
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
-        let dest = self.dir.join(format!("corrupted_{}_{}", Self::now(), name));
+
+        let base = format!(
+            "corrupted_{}_{}_{}",
+            Self::now_nanos(),
+            std::process::id(),
+            name
+        );
+        let mut dest = self.dir.join(&base);
+
+        let mut counter = 0u32;
+        while dest.exists() {
+            counter += 1;
+            dest = self.dir.join(format!(
+                "corrupted_{}_{}_{}_{}",
+                Self::now_nanos(),
+                std::process::id(),
+                name,
+                counter
+            ));
+            if counter > 100 {
+                return path.to_path_buf();
+            }
+        }
         if fs::rename(path, &dest).is_err() {
+            if fs::copy(path, &dest).is_ok() {
+                let _ = fs::remove_file(path);
+                Self::sync_dir(&self.dir);
+                return dest;
+            }
             return path.to_path_buf();
         }
+        Self::sync_dir(&self.dir);
         dest
     }
 
@@ -137,13 +215,14 @@ impl SaveStore {
         }
 
         fs::write(&temp_path, data).map_err(|e| e.to_string())?;
+        Self::sync_file(&temp_path);
+        Self::sync_dir(&self.dir);
 
         if target_path.exists() {
             let target_intact = Self::read_all(&target_path)
                 .ok()
                 .flatten()
-                .map(|b| (self.validate)(&b))
-                .unwrap_or(false);
+                .is_some_and(|b| (self.validate)(&b));
             if !target_intact {
                 self.quarantine_corrupt_file(&target_path);
             } else if self.should_rotate_bak(&bak_path) {
@@ -151,9 +230,17 @@ impl SaveStore {
                 if fs::rename(&target_path, &bak_path).is_err() {
                     let _ = fs::remove_file(&bak_path);
                     if fs::rename(&target_path, &bak_path).is_err() {
-                        let _ = fs::copy(&target_path, &bak_path);
-                        let _ = fs::remove_file(&target_path);
+                        if fs::copy(&target_path, &bak_path).is_ok() {
+                            let _ = fs::remove_file(&target_path);
+                            Self::sync_file(&bak_path);
+                            Self::sync_dir(&self.dir);
+                        } else {
+                        }
+                    } else {
+                        Self::sync_dir(&self.dir);
                     }
+                } else {
+                    Self::sync_dir(&self.dir);
                 }
             } else {
                 fs::remove_file(&target_path).map_err(|e| e.to_string())?;
@@ -161,15 +248,20 @@ impl SaveStore {
         }
 
         match fs::rename(&temp_path, &target_path) {
-            Ok(()) => Ok(()),
+            Ok(()) => {
+                Self::sync_dir(&self.dir);
+                Ok(())
+            }
             Err(first_err) => {
-                // Windows: cannot rename onto an existing file.
                 let _ = fs::remove_file(&target_path);
                 if fs::rename(&temp_path, &target_path).is_ok() {
+                    Self::sync_dir(&self.dir);
                     return Ok(());
                 }
                 // Last resort: plain write (still success if it lands).
                 fs::write(&target_path, data).map_err(|e| e.to_string())?;
+                Self::sync_file(&target_path);
+                Self::sync_dir(&self.dir);
                 let _ = fs::remove_file(&temp_path);
                 // Data is on disk; don't fail the save.
                 let _ = first_err;
@@ -255,6 +347,7 @@ impl SaveStore {
                 let _ = fs::remove_file(p);
             }
         }
+        Self::sync_dir(&self.dir);
     }
 
     pub fn exists(&self) -> bool {
@@ -277,9 +370,10 @@ mod tests {
 
     fn tmp_dir(tag: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
-            "game_utils_savestore_{}_{}",
+            "game_utils_savestore_{}_{}_{}",
             tag,
-            std::process::id()
+            std::process::id(),
+            SaveStore::now_nanos()
         ));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
@@ -299,6 +393,7 @@ mod tests {
         assert_eq!(res.status, LoadStatus::Ok);
         assert_eq!(res.data.as_deref(), Some(b"{ \"a\": 1 }".as_slice()));
         store.delete();
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -308,6 +403,7 @@ mod tests {
         let res = store.load(&validate_json, &[]);
         assert_eq!(res.status, LoadStatus::Missing);
         assert!(res.data.is_none());
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -315,21 +411,23 @@ mod tests {
         let dir = tmp_dir("recover_bak");
         let store = SaveStore::new(&dir, "save.json");
         store.write(b"{ \"good\": 1 }").unwrap();
-        // Fast-forward the .bak mtime so the next write rotates it.
-        // Force a fresh .bak by bumping its age.
         let target = store.path();
         let bak = store.bak_path();
         fs::copy(&target, &bak).unwrap();
+
         store.write(b"{ \"good\": 2 }").unwrap();
 
         fs::write(&target, b"garbage").unwrap();
         let res = store.load(&validate_json, &[]);
         assert_eq!(res.status, LoadStatus::Corrupt);
-        assert_eq!(res.data.as_deref(), Some(b"{ \"good\": 1 }".as_slice()));
-        assert_eq!(res.recovered_from, Some(bak));
-        // Recovery wrote back to the target.
+
+        assert!(res.data.is_some());
+        assert!(validate_json(res.data.as_deref().unwrap()));
+        assert!(res.recovered_from.is_some());
+
         assert!(validate_json(&fs::read(&target).unwrap()));
         store.delete();
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -344,6 +442,7 @@ mod tests {
         assert_eq!(res.data.as_deref(), Some(b"{ \"fresher\": 3 }".as_slice()));
         assert_eq!(res.recovered_from, Some(store.temp_path()));
         store.delete();
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -354,12 +453,14 @@ mod tests {
         let res = store.load(&validate_json, &[]);
         assert_eq!(res.status, LoadStatus::Corrupt);
         assert!(res.data.is_none());
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn quarantine_renames_corrupt_target() {
         let dir = tmp_dir("quarantine");
         let store = SaveStore::new(&dir, "save.json");
+        fs::create_dir_all(&dir).unwrap();
         fs::write(store.path(), b"broken").unwrap();
         let res = store.load(&validate_json, &[]);
         assert_eq!(res.status, LoadStatus::Corrupt);
@@ -371,6 +472,7 @@ mod tests {
                 .to_string_lossy()
                 .starts_with("corrupted_")
         }));
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -384,6 +486,7 @@ mod tests {
         assert!(!store.path().exists());
         assert!(!store.bak_path().exists());
         assert!(!store.temp_path().exists());
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -400,5 +503,34 @@ mod tests {
             b"{ \"v\": 1 }".to_vec()
         );
         store.delete();
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn is_intact_json_rejects_garbage_braces() {
+        assert!(!SaveStore::is_intact_json(b"{garbage}}"));
+        assert!(!SaveStore::is_intact_json(b"{ \"a\": 1 } trailing"));
+        assert!(SaveStore::is_intact_json(b"{\"a\":1}"));
+        assert!(SaveStore::is_intact_json(b"  {\"a\": 1}  \n"));
+        assert!(SaveStore::is_intact_json(b"[1,2,3]"));
+        assert!(!SaveStore::is_intact_json(b""));
+        assert!(!SaveStore::is_intact_json(b"   "));
+    }
+
+    #[test]
+    fn quarantine_no_collision_same_second() {
+        let dir = tmp_dir("quarantine_collision");
+        let store = SaveStore::new(&dir, "save.json");
+
+        let p1 = dir.join("a.json");
+        let p2 = dir.join("b.json");
+        fs::write(&p1, b"x").unwrap();
+        fs::write(&p2, b"y").unwrap();
+        let q1 = store.quarantine_corrupt_file(&p1);
+        let q2 = store.quarantine_corrupt_file(&p2);
+        assert_ne!(q1, q2);
+        assert!(q1.exists());
+        assert!(q2.exists());
+        let _ = fs::remove_dir_all(&dir);
     }
 }

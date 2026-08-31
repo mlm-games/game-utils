@@ -66,10 +66,14 @@ impl Codex {
     }
 
     /// Record `value` against `id`, keeping the highest. Returns `true` if the stored best
-    /// changed (i.e. `value` beat it).
+    /// changed (i.e. `value` beat it). Non-finite values (`NaN`/`inf`) are ignored.
     pub fn record_best(&mut self, id: &str, value: f32) -> bool {
+        if !value.is_finite() {
+            return false;
+        }
         let e = self.entries.entry(id.to_string()).or_default();
-        if e.best.is_none_or(|b| value > b) {
+
+        if e.best.is_none_or(|b| !b.is_finite() || value > b) {
             e.best = Some(value);
             return true;
         }
@@ -119,12 +123,15 @@ impl Codex {
 
     /// Merge `other` in: union `discovered`/`best`/`count` per id (best stays max, counts
     /// add). Used when combining per-session ledgers back into a persisted one.
+    /// Non-finite `best` values are ignored (old corrupt saves may have stored `NaN`).
     pub fn merge(&mut self, other: &Self) {
         for (id, other_e) in &other.entries {
             let e = self.entries.entry(id.clone()).or_default();
             e.discovered |= other_e.discovered;
-            if e.best.is_none_or(|b| other_e.best.is_some_and(|o| o > b)) {
-                e.best = other_e.best;
+            if let Some(o) = other_e.best.filter(|v| v.is_finite())
+                && e.best.is_none_or(|b| !b.is_finite() || o > b)
+            {
+                e.best = Some(o);
             }
             e.count = e.count.saturating_add(other_e.count);
         }

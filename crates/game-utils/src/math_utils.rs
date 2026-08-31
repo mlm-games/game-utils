@@ -10,9 +10,16 @@ impl MathUtils {
         smooth_time: f32,
         delta: f32,
     ) -> (f32, f32) {
+        if !current.is_finite() || !target.is_finite() || !current_velocity.is_finite() {
+            return (target, 0.0);
+        }
+        if !smooth_time.is_finite() || !delta.is_finite() || delta <= 0.0 {
+            return (current, current_velocity);
+        }
         let smooth_time = smooth_time.max(0.0001);
         let omega = 2.0 / smooth_time;
         let x = omega * delta;
+
         let exp = 1.0 / (1.0 + x + 0.48 * x * x + 0.235 * x * x * x);
         let change = current - target;
         let temp = (current_velocity + omega * change) * delta;
@@ -22,6 +29,9 @@ impl MathUtils {
     }
 
     pub fn approach(current: f32, target: f32, rate: f32) -> f32 {
+        if !current.is_finite() || !target.is_finite() || !rate.is_finite() || rate < 0.0 {
+            return current;
+        }
         if current < target {
             (current + rate).min(target)
         } else {
@@ -30,7 +40,10 @@ impl MathUtils {
     }
 
     pub fn wave(from: f32, to: f32, duration: f32, offset: f32, time_secs: f32) -> f32 {
-        if duration == 0.0 {
+        if !duration.is_finite() || duration <= 0.0 {
+            return from;
+        }
+        if !from.is_finite() || !to.is_finite() || !offset.is_finite() || !time_secs.is_finite() {
             return from;
         }
         let t = (time_secs + offset) / duration;

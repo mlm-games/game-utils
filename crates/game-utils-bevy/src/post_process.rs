@@ -259,6 +259,7 @@ pub fn sync_post_process_settings<S: FreelyMutableState>(
             TransitionKind::CircleWipe(CircleWipeDirection::Expand) => 1.0,
             TransitionKind::CircleWipe(CircleWipeDirection::Contract) => -1.0,
             TransitionKind::Fade => 1.0,
+            TransitionKind::Custom(_) => 1.0,
         };
     }
 }

@@ -327,11 +327,31 @@ impl ProfileManager {
             return Ok(None);
         }
         fs::create_dir_all(self.backup_dir())?;
-        let stamp = unix_now();
-        let dest = self
+        let stamp = unix_now_nanos();
+        let mut dest = self
             .backup_dir()
             .join(format!("{CLEARED_PREFIX}{idx}_{stamp}"));
-        fs::rename(&dir, &dest)?;
+
+        let mut ctr = 0u32;
+        while dest.exists() {
+            ctr += 1;
+            dest = self
+                .backup_dir()
+                .join(format!("{CLEARED_PREFIX}{idx}_{stamp}_{ctr}"));
+            if ctr > 100 {
+                return Err(ProfileError::Io(std::io::Error::other(
+                    "too many archive collisions",
+                )));
+            }
+        }
+        if let Err(e) = fs::rename(&dir, &dest) {
+            if e.kind() == std::io::ErrorKind::CrossesDevices || e.raw_os_error() == Some(18) {
+                copy_dir_recursive(&dir, &dest)?;
+                fs::remove_dir_all(&dir)?;
+            } else {
+                return Err(e.into());
+            }
+        }
         self.prune_cleared_archives()?;
         Ok(Some(dest))
     }
@@ -345,17 +365,27 @@ impl ProfileManager {
         let Some(entries) = fs::read_dir(self.backup_dir()).ok() else {
             return Ok(());
         };
-        let mut archives: Vec<PathBuf> = entries
+        let mut archives: Vec<(PathBuf, u64)> = entries
             .flatten()
             .filter(|e| {
                 e.file_type().map(|t| t.is_dir()).unwrap_or(false)
                     && e.file_name().to_string_lossy().starts_with(CLEARED_PREFIX)
             })
-            .map(|e| e.path())
+            .map(|e| {
+                let p = e.path();
+                let mtime = fs::metadata(&p)
+                    .and_then(|m| m.modified())
+                    .ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0);
+                (p, mtime)
+            })
             .collect();
-        archives.sort_by_key(|p| p.to_string_lossy().into_owned());
+
+        archives.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
         while archives.len() > self.max_cleared_archives {
-            let oldest = archives.remove(0);
+            let (oldest, _) = archives.remove(0);
             let _ = fs::remove_dir_all(oldest);
         }
         Ok(())
@@ -432,12 +462,20 @@ impl ProfileManager {
             let _ = fs::remove_dir_all(&profile_1);
         }
         if let Err(e) = fs::rename(&staging, &profile_1) {
-            let _ = fs::remove_dir_all(&staging);
-            self.legacy_fallback = true;
-            return Err(ProfileError::Io(e));
+            if e.kind() == std::io::ErrorKind::CrossesDevices || e.raw_os_error() == Some(18) {
+                if let Err(copy_err) = copy_dir_recursive(&staging, &profile_1) {
+                    let _ = fs::remove_dir_all(&staging);
+                    self.legacy_fallback = true;
+                    return Err(ProfileError::Io(copy_err));
+                }
+                let _ = fs::remove_dir_all(&staging);
+            } else {
+                let _ = fs::remove_dir_all(&staging);
+                self.legacy_fallback = true;
+                return Err(ProfileError::Io(e));
+            }
         }
 
-        // 4) Originals are left in place as a second backup; never deleted.
         self.migrated = true;
         self.migrated_legacy = true;
         self.persist_pointer()
@@ -447,6 +485,14 @@ impl ProfileManager {
         let ok_src = fs::metadata(src).map(|m| m.len()).unwrap_or(0);
         let ok_dst = fs::metadata(dst).map(|m| m.len()).unwrap_or(0);
         if ok_src == 0 || ok_src != ok_dst {
+            return false;
+        }
+
+        if let (Ok(a), Ok(b)) = (fs::read(src), fs::read(dst)) {
+            if a != b {
+                return false;
+            }
+        } else {
             return false;
         }
         if dst.extension().and_then(|e| e.to_str()) == Some("ron") {
@@ -463,11 +509,34 @@ fn validate_pointer(bytes: &[u8]) -> bool {
     ron::from_str::<PointerConfig>(&String::from_utf8_lossy(bytes)).is_ok()
 }
 
+#[allow(dead_code)]
 fn unix_now() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0)
+}
+
+fn unix_now_nanos() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0)
+}
+
+fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        let dst_path = dst.join(entry.file_name());
+        if ty.is_dir() {
+            copy_dir_recursive(&entry.path(), &dst_path)?;
+        } else {
+            fs::copy(entry.path(), &dst_path)?;
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

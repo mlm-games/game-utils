@@ -11,10 +11,14 @@ pub enum Aggregation {
     Any,
 }
 
-/// Aggregate a sequence of values under a mode, ignoring `None` entries.
-/// `Any` returns the value of any non-zero entry (loosely: "has ever been seen").
+/// Aggregate a sequence of values under a mode, ignoring `None` and non-finite entries.
+/// `Any` returns the value of any non-zero finite entry (loosely: "has ever been seen").
 pub fn aggregate(agg: Aggregation, values: &[Option<f32>]) -> Option<f32> {
-    let present: Vec<f32> = values.iter().filter_map(|v| *v).collect();
+    let present: Vec<f32> = values
+        .iter()
+        .filter_map(|v| *v)
+        .filter(|v| v.is_finite())
+        .collect();
     if present.is_empty() {
         return None;
     }

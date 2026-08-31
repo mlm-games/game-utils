@@ -67,7 +67,7 @@ impl ObjectPool {
             ec.insert(Visibility::Visible);
             return Some(e);
         }
-        if pool.active.len() >= pool.max_size {
+        if pool.total_count() >= pool.max_size {
             return None;
         }
         let mut ec = commands.spawn((Visibility::Visible, M::default()));

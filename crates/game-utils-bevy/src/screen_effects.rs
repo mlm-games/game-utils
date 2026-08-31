@@ -81,8 +81,15 @@ impl ImpactShake {
     }
 
     /// Integrate one step of the spring, returning the offset to apply this frame.
+    /// `delta` is clamped to `0..1/10` and the offset increment is `velocity*dt*60`
+    /// so the same `ImpactShakeConfig` feels identical at 30/60/144 fps (previously
+    /// `offset += velocity` was framerate-dependent).
     pub fn step(&mut self, delta: f32, cfg: &ImpactShakeConfig) -> Vec2 {
-        // Fatigue decays over time; the damping curve scales new impulses.
+        let delta = delta.clamp(0.0, 0.1);
+        if !delta.is_finite() || delta <= 0.0 {
+            return self.offset;
+        }
+
         self.fatigue *= (-delta / cfg.fatigue_tau).exp();
         let impulse = self.added_velocity.length().sqrt();
         let damp_scale = (cfg.min_scale).max(cfg.fatigue_ref / (cfg.fatigue_ref + self.fatigue));
@@ -92,7 +99,7 @@ impl ImpactShake {
         self.fatigue += (impulse - cfg.fatigue_free_impulse).max(0.0);
         self.added_velocity = Vec2::ZERO;
 
-        self.offset += self.velocity;
+        self.offset += self.velocity * delta * 60.0;
         if self.offset.length_squared() > cfg.max_offset * cfg.max_offset {
             self.offset = self.offset.normalize() * cfg.max_offset;
             self.velocity *= 0.5;

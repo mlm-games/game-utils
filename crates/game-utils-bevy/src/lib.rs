@@ -6,6 +6,7 @@ pub mod hit_flash;
 pub mod hitstop;
 pub mod i18n;
 pub mod juice;
+pub mod loading;
 pub mod pooling;
 pub mod post_process;
 pub mod save;

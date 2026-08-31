@@ -30,6 +30,9 @@ pub fn load_ftl(locale: &str, ftl: &str, keys: &[&str]) -> (String, HashMap<Stri
 }
 
 /// Bevy-agnostic locale resources: holds registered languages and the current translations.
+///
+/// CSV workflows are handled by the external tool at `../tools/ftl-csv-convert`
+/// (`ftl2csv`/`csv2ftl`, including Godot polyglot CSVs).
 #[derive(Default, Clone)]
 pub struct LocaleResources {
     pub current: String,
@@ -41,8 +44,7 @@ pub struct LocaleResources {
 impl LocaleResources {
     pub fn register(&mut self, locale: &str, ftl: &str, keys: &[&str]) {
         let (loc, map) = load_ftl(locale, ftl, keys);
-        if self.available.iter().any(|a| a == &loc) {
-            // Allow refresh of an already-registered locale.
+        if self.available.contains(&loc) {
             self.all.insert(loc.clone(), map);
             if self.current == loc {
                 self.refresh();
@@ -57,11 +59,20 @@ impl LocaleResources {
         }
     }
 
-    pub fn set_locale(&mut self, locale: &str) {
+    /// Set current locale; returns `true` if the locale exists and was applied,
+    /// `false` if unknown (previously silently no-oped).
+    pub fn set_locale(&mut self, locale: &str) -> bool {
         if self.all.contains_key(locale) {
             self.current = locale.to_string();
             self.translations = self.all[locale].clone();
+            true
+        } else {
+            false
         }
+    }
+
+    pub fn has_locale(&self, locale: &str) -> bool {
+        self.all.contains_key(locale)
     }
 
     pub fn translate(&self, key: &str) -> Option<&str> {

@@ -57,12 +57,27 @@ impl UnlockCondition {
         let Some(val) = self.value(store, category) else {
             return 0.0;
         };
+        if !val.is_finite() || !self.threshold.is_finite() {
+            return 0.0;
+        }
         match self.aggregation {
-            Aggregation::Min if self.threshold != 0.0 => {
-                (self.threshold / val.max(f32::MIN_POSITIVE)).min(1.0)
+            Aggregation::Min => {
+                if val <= self.threshold {
+                    1.0
+                } else if self.threshold == 0.0 {
+                    0.0
+                } else {
+                    (self.threshold / val.max(f32::MIN_POSITIVE)).clamp(0.0, 1.0)
+                }
             }
             Aggregation::Any => f32::from(val != 0.0),
-            _ => (val / self.threshold).clamp(0.0, 1.0),
+            _ => {
+                if self.threshold == 0.0 {
+                    f32::from(val >= 0.0)
+                } else {
+                    (val / self.threshold).clamp(0.0, 1.0)
+                }
+            }
         }
     }
 }

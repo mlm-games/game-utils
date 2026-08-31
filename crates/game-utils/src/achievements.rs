@@ -167,7 +167,9 @@ impl AchievementRegistry {
     }
 
     /// Whether a stat value crosses an achievement's threshold, aggregating across
-    /// every category if the condition is global.
+    /// every category if the condition is global.  Global aggregation is computed
+    /// per-achievement (so mixed `Max`/`Any` achievements for the same `stat_id`
+    /// don't share a wrong global value).
     pub fn reached_with(
         &self,
         store: &StatsStore,
@@ -175,11 +177,6 @@ impl AchievementRegistry {
         aggregation: Aggregation,
         category: &str,
     ) -> bool {
-        let values: Vec<Option<f32>> = store
-            .category_iter()
-            .map(|(_cat, map)| map.get(stat_id).copied())
-            .collect();
-        let global = aggregate(aggregation, &values);
         self.achievements.iter().any(|a| match &a.condition {
             AchievementCondition::Stat {
                 stat_id: cid,
@@ -191,12 +188,17 @@ impl AchievementRegistry {
                     return false;
                 }
                 let val = if *cglobal {
-                    global
+                    let values: Vec<Option<f32>> = store
+                        .category_iter()
+                        .map(|(_cat, map)| map.get(stat_id).copied())
+                        .collect();
+                    aggregate(*cagg, &values)
                 } else {
                     store.best(category, stat_id)
                 };
                 match val {
                     None => false,
+                    Some(v) if !v.is_finite() => false,
                     Some(v) => match cagg {
                         Aggregation::Max | Aggregation::Sum => v >= *threshold,
                         Aggregation::Min => v <= *threshold,

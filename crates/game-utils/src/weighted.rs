@@ -5,12 +5,13 @@ pub const SEED_ALPHABET: &str = "ABCDEFGHJKMNPQRTUVWXY346789";
 
 /// Efraimidis-Spirakis key for weighted sampling without replacement.
 fn es_key(item_seed: u64, weight: f32) -> f64 {
-    if weight <= 0.0 {
+    if !weight.is_finite() || weight <= 0.0 {
         return f64::NEG_INFINITY;
     }
     let mut rng = StdRng::seed_from_u64(item_seed);
     let u: f64 = rng.random();
     let u = if u <= 0.0 { 1e-12 } else { u };
+
     u.ln() / weight as f64
 }
 
@@ -29,13 +30,17 @@ pub struct Weighted;
 
 impl Weighted {
     /// Pick an index from `weights`, where the probability of `i` is `weights[i] / sum`.
-    /// Returns `None` for an empty or non-positive-sum slice.
+    /// Returns `None` for an empty, non-positive-sum, or non-finite-weight slice
+    /// (guards `NaN`/`inf` which would otherwise panic in `random_range`).
     pub fn pick_index<R: Rng + ?Sized>(rng: &mut R, weights: &[f32]) -> Option<usize> {
         if weights.is_empty() {
             return None;
         }
+        if weights.iter().any(|w| !w.is_finite()) {
+            return None;
+        }
         let total: f32 = weights.iter().sum();
-        if total <= 0.0 {
+        if !total.is_finite() || total <= 0.0 {
             return None;
         }
         let mut roll = rng.random_range(0.0..total);
@@ -58,6 +63,8 @@ impl Weighted {
     }
 
     /// Weighted pick that retries until it draws an unlocked item.
+    /// Deterministic: consumes `rng` once (via a single seeded `StdRng`), so replay
+    /// with the same seed is stable.  Previously consumed the parent RNG twice.
     pub fn pick_weighted_unlocked<'a, T, R: Rng + ?Sized, F: Fn(&T) -> f32, U: Fn(&T) -> bool>(
         rng: &mut R,
         items: &'a [T],
@@ -83,7 +90,6 @@ impl Weighted {
         if unlocked_items.is_empty() {
             return None;
         }
-        let mut sub = StdRng::from_rng(rng);
         Self::pick_index(&mut sub, &unlocked_weights).map(|i| unlocked_items[i])
     }
 
@@ -126,10 +132,14 @@ impl Weighted {
     ) -> Vec<usize> {
         let mut scored: Vec<(f64, usize)> = Vec::new();
         for (i, w) in weights.iter().enumerate() {
-            if !unlocked(i) || *w <= 0.0 {
+            if !unlocked(i) || !w.is_finite() || *w <= 0.0 {
                 continue;
             }
-            scored.push((es_key(item_seed(parent_seed, i), *w), i));
+            let key = es_key(item_seed(parent_seed, i), *w);
+            if !key.is_finite() {
+                continue;
+            }
+            scored.push((key, i));
         }
         scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
         scored.into_iter().take(n).map(|(_, i)| i).collect()
