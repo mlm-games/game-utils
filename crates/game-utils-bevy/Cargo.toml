@@ -15,5 +15,14 @@ bevy.workspace = true
 rand.workspace = true
 serde.workspace = true
 
+[features]
+default = ["audio", "transitions", "screen_effects", "pooling", "time_scale"]
+audio = []
+transitions = []
+screen_effects = []
+pooling = []
+time_scale = []
+full = ["audio", "transitions", "screen_effects", "pooling", "time_scale"]
+
 [lints.clippy]
 type_complexity = "allow"

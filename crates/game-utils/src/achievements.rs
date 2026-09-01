@@ -2,22 +2,19 @@ use crate::stats::{Aggregation, StatsStore, aggregate};
 use crate::typed_id::{AchievementId, StatId};
 use std::collections::HashSet;
 
-/// Storage backends an achievement persists to. The registry reconciles a "primary" saved
-/// source against a "secondary" (server) source so both stay in sync.
+/// Storage backends an achievement persists to.
 pub trait AchievementBackend {
-    /// Whether `id` is unlocked in this backend.
-    fn is_unlocked(&self, id: &str) -> bool;
-    /// Mark `id` unlocked in this backend.
-    fn unlock(&mut self, id: &str);
+    fn is_unlocked(&self, id: &AchievementId) -> bool;
+    fn unlock(&mut self, id: &AchievementId);
 }
 
 /// A backend with no external state.
-impl AchievementBackend for HashSet<String> {
-    fn is_unlocked(&self, id: &str) -> bool {
+impl AchievementBackend for HashSet<AchievementId> {
+    fn is_unlocked(&self, id: &AchievementId) -> bool {
         self.contains(id)
     }
-    fn unlock(&mut self, id: &str) {
-        self.insert(id.to_string());
+    fn unlock(&mut self, id: &AchievementId) {
+        self.insert(id.clone());
     }
 }
 
@@ -210,11 +207,12 @@ impl AchievementRegistry {
         })
     }
 
-    pub fn is_unlocked(&self, id: &str) -> bool {
+    /// Typed primary.
+    pub fn is_unlocked(&self, id: &AchievementId) -> bool {
         self.unlocked.contains(id)
     }
-    pub fn is_unlocked_typed(&self, id: &AchievementId) -> bool {
-        self.unlocked.contains(id)
+    pub fn is_unlocked_str(&self, id: &str) -> bool {
+        self.unlocked.contains(&AchievementId::new(id))
     }
 }
 
@@ -233,9 +231,9 @@ mod tests {
 
     #[test]
     fn reconcile_dual_backends() {
-        let mut saved = HashSet::new();
-        let mut external = HashSet::new();
-        external.insert("a".to_string());
+        let mut saved: HashSet<AchievementId> = HashSet::new();
+        let mut external: HashSet<AchievementId> = HashSet::new();
+        external.insert(AchievementId::new("a"));
         let mut reg = AchievementRegistry::new(vec![
             Achievement::new(
                 "a",
@@ -251,18 +249,18 @@ mod tests {
             ),
         ]);
         reg.reconcile(&mut saved, &mut external);
-        assert!(reg.is_unlocked("a"));
-        assert!(saved.contains("a")); // external-only -> saved
-        assert!(!reg.is_unlocked("b"));
-        assert!(!saved.contains("b")); // locked in both stays locked
+        assert!(reg.is_unlocked(&AchievementId::new("a")));
+        assert!(saved.contains("a")); // external-only -> saved (Borrow<str>)
+        assert!(!reg.is_unlocked(&AchievementId::new("b")));
+        assert!(!saved.contains("b"));
         assert!(!external.contains("b"));
     }
 
     #[test]
     fn stat_achievement_auto_unlocks() {
         let store = store_with("boss", 10.0);
-        let mut saved = HashSet::new();
-        let mut external = HashSet::new();
+        let mut saved: HashSet<AchievementId> = HashSet::new();
+        let mut external: HashSet<AchievementId> = HashSet::new();
         let mut reg = AchievementRegistry::new(vec![
             Achievement::new(
                 "boss_1",
@@ -281,15 +279,15 @@ mod tests {
         assert_eq!(new, vec![AchievementId::new("boss_1")]);
         assert!(saved.contains("boss_1"));
         assert!(external.contains("boss_1"));
-        assert!(!reg.is_unlocked("boss_2"));
+        assert!(!reg.is_unlocked(&AchievementId::new("boss_2")));
     }
 
     #[test]
     fn existing_unlocks_are_kept() {
         let store = store_with("kills", 3.0);
-        let mut saved = HashSet::new();
-        saved.insert("kills_5".to_string());
-        let mut external = HashSet::new();
+        let mut saved: HashSet<AchievementId> = HashSet::new();
+        saved.insert(AchievementId::new("kills_5"));
+        let mut external: HashSet<AchievementId> = HashSet::new();
         let mut reg = AchievementRegistry::new(vec![Achievement::new(
             "kills_5",
             "Killer",
@@ -297,8 +295,7 @@ mod tests {
             AchievementCondition::stat("kills", Aggregation::Sum, 5.0, true),
         )]);
         reg.reconcile(&mut saved, &mut external);
-        assert!(reg.is_unlocked("kills_5"));
-        // Already unlocked -> no new unlock on a later stats scan.
+        assert!(reg.is_unlocked(&AchievementId::new("kills_5")));
         let new = reg.update_from_stats(&store, "stats0", &mut saved, &mut external);
         assert!(new.is_empty());
     }

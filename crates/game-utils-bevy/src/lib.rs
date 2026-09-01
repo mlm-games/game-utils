@@ -55,7 +55,6 @@ impl<S: FreelyMutableState> Default for EcosystemPlugin<S> {
 impl<S: FreelyMutableState> Plugin for EcosystemPlugin<S> {
     fn build(&self, app: &mut App) {
         app.add_plugins((
-            audio::AudioPlugin,
             camera_follow::CameraFollowPlugin,
             center_pivot::CenterPivotPlugin,
             game_feel::GameFeelPlugin,
@@ -64,9 +63,6 @@ impl<S: FreelyMutableState> Plugin for EcosystemPlugin<S> {
             hitstop::HitStopPlugin,
             juice::JuicePlugin,
             post_process::ScreenEffectsPostProcessPlugin,
-            screen_effects::ScreenEffectsPlugin,
-            time_scale::TimeScalePlugin,
-            transitions::TransitionsPlugin::<S>::default(),
             ui_effects::UiEffectsPlugin,
             vfx::VfxPlugin,
         ))
@@ -77,5 +73,17 @@ impl<S: FreelyMutableState> Plugin for EcosystemPlugin<S> {
                 post_process::sync_post_process_settings::<S>,
             ),
         );
+        #[cfg(feature = "audio")]
+        app.add_plugins(audio::AudioPlugin);
+        #[cfg(feature = "screen_effects")]
+        app.add_plugins(screen_effects::ScreenEffectsPlugin);
+        #[cfg(feature = "time_scale")]
+        app.add_plugins(time_scale::TimeScalePlugin);
+        #[cfg(feature = "transitions")]
+        app.add_plugins(transitions::TransitionsPlugin::<S>::default());
+        #[cfg(feature = "pooling")]
+        {
+            // pooling is a resource-only helper, no plugin; keep available as module
+        }
     }
 }

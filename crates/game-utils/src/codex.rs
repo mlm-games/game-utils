@@ -48,71 +48,92 @@ pub struct Codex {
 }
 
 impl Codex {
-    /// Whether `id` has been discovered. Accepts `&str` or `&CodexId` via `Borrow`.
-    pub fn is_discovered(&self, id: &str) -> bool {
+    /// Whether `id` has been discovered.
+    pub fn is_discovered(&self, id: &CodexId) -> bool {
         self.entries.get(id).is_some_and(|e| e.discovered)
     }
-    pub fn is_discovered_typed(&self, id: &CodexId) -> bool {
-        self.entries.get(id).is_some_and(|e| e.discovered)
+    /// Keep string shim for migration (`Borrow<str>` still works at map level, but surface is now typed).
+    pub fn is_discovered_str(&self, id: &str) -> bool {
+        self.is_discovered(&CodexId::new(id))
     }
 
     /// Mark `id` discovered. Returns `true` if this changed its state (newly discovered).
-    pub fn mark_discovered(&mut self, id: &str) -> bool {
+    pub fn mark_discovered(&mut self, id: &CodexId) -> bool {
         if !self.is_discovered(id) {
-            self.entries
-                .entry(CodexId::new(id))
-                .or_default()
-                .discovered = true;
+            self.entries.entry(id.clone()).or_default().discovered = true;
             return true;
         }
         false
     }
+    pub fn mark_discovered_str(&mut self, id: &str) -> bool {
+        self.mark_discovered(&CodexId::new(id))
+    }
 
     /// The best recorded value for `id`, if any.
-    pub fn best(&self, id: &str) -> Option<f32> {
+    pub fn best(&self, id: &CodexId) -> Option<f32> {
         self.entries.get(id).and_then(|e| e.best)
+    }
+    pub fn best_str(&self, id: &str) -> Option<f32> {
+        self.best(&CodexId::new(id))
     }
 
     /// Record `value` against `id`, keeping the highest. Returns `true` if the stored best
     /// changed (i.e. `value` beat it). Non-finite values (`NaN`/`inf`) are ignored.
-    pub fn record_best(&mut self, id: &str, value: f32) -> bool {
+    pub fn record_best(&mut self, id: &CodexId, value: f32) -> bool {
         if !value.is_finite() {
             return false;
         }
-        let e = self.entries.entry(CodexId::new(id)).or_default();
-
+        let e = self.entries.entry(id.clone()).or_default();
         if e.best.is_none_or(|b| !b.is_finite() || value > b) {
             e.best = Some(value);
             return true;
         }
         false
     }
+    pub fn record_best_str(&mut self, id: &str, value: f32) -> bool {
+        self.record_best(&CodexId::new(id), value)
+    }
 
     /// The counter for `id` (0 if never recorded).
-    pub fn count(&self, id: &str) -> u64 {
+    pub fn count(&self, id: &CodexId) -> u64 {
         self.entries.get(id).map_or(0, |e| e.count)
+    }
+    pub fn count_str(&self, id: &str) -> u64 {
+        self.count(&CodexId::new(id))
     }
 
     /// Bump `id`'s counter by `by`. Returns the new count.
-    pub fn increment_count(&mut self, id: &str, by: u64) -> u64 {
-        let e = self.entries.entry(CodexId::new(id)).or_default();
+    pub fn increment_count(&mut self, id: &CodexId, by: u64) -> u64 {
+        let e = self.entries.entry(id.clone()).or_default();
         e.count = e.count.saturating_add(by);
         e.count
     }
+    pub fn increment_count_str(&mut self, id: &str, by: u64) -> u64 {
+        self.increment_count(&CodexId::new(id), by)
+    }
 
     /// Set `id`'s counter exactly.
-    pub fn set_count(&mut self, id: &str, count: u64) {
-        self.entries.entry(CodexId::new(id)).or_default().count = count;
+    pub fn set_count(&mut self, id: &CodexId, count: u64) {
+        self.entries.entry(id.clone()).or_default().count = count;
+    }
+    pub fn set_count_str(&mut self, id: &str, count: u64) {
+        self.set_count(&CodexId::new(id), count)
     }
 
     /// The full entry for `id`.
-    pub fn entry(&self, id: &str) -> Option<&CodexEntry> {
+    pub fn entry(&self, id: &CodexId) -> Option<&CodexEntry> {
         self.entries.get(id)
+    }
+    pub fn entry_str(&self, id: &str) -> Option<&CodexEntry> {
+        self.entry(&CodexId::new(id))
     }
 
     /// Mutable entry for `id`, creating it if absent.
-    pub fn entry_mut(&mut self, id: &str) -> &mut CodexEntry {
-        self.entries.entry(CodexId::new(id)).or_default()
+    pub fn entry_mut(&mut self, id: &CodexId) -> &mut CodexEntry {
+        self.entries.entry(id.clone()).or_default()
+    }
+    pub fn entry_mut_str(&mut self, id: &str) -> &mut CodexEntry {
+        self.entry_mut(&CodexId::new(id))
     }
 
     /// Iterate over `(id, entry)` pairs.
@@ -120,8 +141,16 @@ impl Codex {
         self.entries.iter()
     }
 
-    /// Ids that have been discovered, in key order.
-    pub fn discovered_ids(&self) -> Vec<&str> {
+    /// Typed discovered ids, in key order (golden).
+    pub fn discovered_ids(&self) -> Vec<CodexId> {
+        self.entries
+            .iter()
+            .filter(|(_, e)| e.discovered)
+            .map(|(id, _)| id.clone())
+            .collect()
+    }
+    /// String shim for `discovered_ids` keep `&str` view.
+    pub fn discovered_ids_str(&self) -> Vec<&str> {
         self.entries
             .iter()
             .filter(|(_, e)| e.discovered)
@@ -190,7 +219,8 @@ impl<S: crate::storage::Storage> CodexStore<S> {
         storage: S,
     ) -> Self {
         Self {
-            store: SaveStore::new_with_storage(dir, file_name, storage).with_validator(codex_intact),
+            store: SaveStore::new_with_storage(dir, file_name, storage)
+                .with_validator(codex_intact),
             codex: Codex::default(),
             loaded: false,
             loaded_from: std::path::PathBuf::new(),
@@ -245,42 +275,55 @@ impl<S: crate::storage::Storage> CodexStore<S> {
         self.store.write(s.as_bytes())
     }
 
-    // Convenience delegation onto the inner ledger.
+    // Typed delegation onto the inner ledger (golden). String shims keep compat.
 
-    /// Whether `id` has been discovered.
-    pub fn is_discovered(&self, id: &str) -> bool {
+    pub fn is_discovered(&self, id: &CodexId) -> bool {
         self.codex.is_discovered(id)
     }
+    pub fn is_discovered_str(&self, id: &str) -> bool {
+        self.codex.is_discovered_str(id)
+    }
 
-    /// Mark `id` discovered. Returns `true` if newly discovered.
-    pub fn mark_discovered(&mut self, id: &str) -> bool {
+    pub fn mark_discovered(&mut self, id: &CodexId) -> bool {
         self.codex.mark_discovered(id)
     }
+    pub fn mark_discovered_str(&mut self, id: &str) -> bool {
+        self.codex.mark_discovered_str(id)
+    }
 
-    /// Best recorded value for `id`.
-    pub fn best(&self, id: &str) -> Option<f32> {
+    pub fn best(&self, id: &CodexId) -> Option<f32> {
         self.codex.best(id)
     }
+    pub fn best_str(&self, id: &str) -> Option<f32> {
+        self.codex.best_str(id)
+    }
 
-    /// Record `value` against `id`, keeping the highest. Returns `true` if it changed.
-    pub fn record_best(&mut self, id: &str, value: f32) -> bool {
+    pub fn record_best(&mut self, id: &CodexId, value: f32) -> bool {
         self.codex.record_best(id, value)
     }
-
-    /// Counter for `id`.
-    pub fn count(&self, id: &str) -> u64 {
-        self.codex.count(id)
+    pub fn record_best_str(&mut self, id: &str, value: f32) -> bool {
+        self.codex.record_best_str(id, value)
     }
 
-    /// Bump `id`'s counter, returning the new count.
-    pub fn increment_count(&mut self, id: &str, by: u64) -> u64 {
+    pub fn count(&self, id: &CodexId) -> u64 {
+        self.codex.count(id)
+    }
+    pub fn count_str(&self, id: &str) -> u64 {
+        self.codex.count_str(id)
+    }
+
+    pub fn increment_count(&mut self, id: &CodexId, by: u64) -> u64 {
         self.codex.increment_count(id, by)
+    }
+    pub fn increment_count_str(&mut self, id: &str, by: u64) -> u64 {
+        self.codex.increment_count_str(id, by)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::typed_id::CodexId;
     use std::path::PathBuf;
 
     fn tmp_dir(tag: &str) -> PathBuf {
@@ -293,65 +336,63 @@ mod tests {
     #[test]
     fn discovery_lifecycle() {
         let mut c = Codex::default();
-        assert!(c.mark_discovered("enemy_1"));
-        assert!(c.is_discovered("enemy_1"));
-        // Second mark is a no-op.
-        assert!(!c.mark_discovered("enemy_1"));
-        assert!(!c.is_discovered("enemy_2"));
-        assert_eq!(c.discovered_ids(), vec!["enemy_1"]);
+        let a = CodexId::new("enemy_1");
+        let b = CodexId::new("enemy_2");
+        assert!(c.mark_discovered(&a));
+        assert!(c.is_discovered(&a));
+        assert!(!c.mark_discovered(&a));
+        assert!(!c.is_discovered(&b));
+        assert_eq!(c.discovered_ids(), vec![a]);
     }
 
     #[test]
     fn best_keeps_max_and_counts_accumulate() {
         let mut c = Codex::default();
-        assert!(c.record_best("bodypart_a", 2.0));
-        assert_eq!(c.best("bodypart_a"), Some(2.0));
-        // Lower value doesn't regress.
-        assert!(!c.record_best("bodypart_a", 1.0));
-        assert_eq!(c.best("bodypart_a"), Some(2.0));
-        // Higher value wins.
-        assert!(c.record_best("bodypart_a", 3.0));
-        assert_eq!(c.best("bodypart_a"), Some(3.0));
-        assert_eq!(c.count("bodypart_a"), 0);
-        assert_eq!(c.increment_count("bodypart_a", 1), 1);
-        assert_eq!(c.increment_count("bodypart_a", 2), 3);
-        assert_eq!(c.count("bodypart_a"), 3);
+        let id = CodexId::new("bodypart_a");
+        assert!(c.record_best(&id, 2.0));
+        assert_eq!(c.best(&id), Some(2.0));
+        assert!(!c.record_best(&id, 1.0));
+        assert_eq!(c.best(&id), Some(2.0));
+        assert!(c.record_best(&id, 3.0));
+        assert_eq!(c.best(&id), Some(3.0));
+        assert_eq!(c.count(&id), 0);
+        assert_eq!(c.increment_count(&id, 1), 1);
+        assert_eq!(c.increment_count(&id, 2), 3);
+        assert_eq!(c.count(&id), 3);
     }
 
     #[test]
     fn merge_unions_fields() {
+        let id = CodexId::new("x");
         let mut a = Codex::default();
-        a.mark_discovered("x");
-        a.record_best("x", 2.0);
-        a.increment_count("x", 1);
-
+        a.mark_discovered(&id);
+        a.record_best(&id, 2.0);
+        a.increment_count(&id, 1);
         let mut b = Codex::default();
-        b.record_best("x", 5.0); // better best, not discovered
-        b.increment_count("x", 10);
-
+        b.record_best(&id, 5.0);
+        b.increment_count(&id, 10);
         let mut c = Codex::default();
         c.merge(&a);
         c.merge(&b);
-        assert!(c.is_discovered("x"));
-        assert_eq!(c.best("x"), Some(5.0));
-        assert_eq!(c.count("x"), 11);
+        assert!(c.is_discovered(&id));
+        assert_eq!(c.best(&id), Some(5.0));
+        assert_eq!(c.count(&id), 11);
     }
 
     #[test]
     fn store_roundtrips_ron() {
         let dir = tmp_dir("roundtrip");
         let mut s = CodexStore::new(&dir, "codex.ron");
-        s.mark_discovered("enemy_1");
-        s.record_best("bodypart_a", 3.0);
-        s.increment_count("enemy_1", 7);
+        s.mark_discovered(&CodexId::new("enemy_1"));
+        s.record_best(&CodexId::new("bodypart_a"), 3.0);
+        s.increment_count(&CodexId::new("enemy_1"), 7);
         s.save().unwrap();
-
         let mut s2 = CodexStore::new(&dir, "codex.ron");
         assert_eq!(s2.load(), LoadStatus::Ok);
         assert!(s2.is_loaded());
-        assert!(s2.is_discovered("enemy_1"));
-        assert_eq!(s2.best("bodypart_a"), Some(3.0));
-        assert_eq!(s2.count("enemy_1"), 7);
+        assert!(s2.is_discovered(&CodexId::new("enemy_1")));
+        assert_eq!(s2.best(&CodexId::new("bodypart_a")), Some(3.0));
+        assert_eq!(s2.count(&CodexId::new("enemy_1")), 7);
         s2.store().delete();
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -362,7 +403,7 @@ mod tests {
         let mut s = CodexStore::new(&dir, "codex.ron");
         assert_eq!(s.load(), LoadStatus::Missing);
         assert!(s.codex().is_empty());
-        assert!(!s.is_discovered("x"));
+        assert!(!s.is_discovered(&CodexId::new("x")));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -370,15 +411,14 @@ mod tests {
     fn store_recovers_corrupt_from_template() {
         let dir = tmp_dir("recover");
         let mut s = CodexStore::new(&dir, "codex.ron");
-        s.increment_count("enemy", 4);
+        s.increment_count(&CodexId::new("enemy"), 4);
         s.save().unwrap();
-        // Second save rotates the first copy into a .bak so recovery has a fallback.
         s.save().unwrap();
         let path = s.store().path();
         std::fs::write(&path, b"garbage").unwrap();
         let mut s2 = CodexStore::new(&dir, "codex.ron");
         assert_eq!(s2.load(), LoadStatus::Corrupt);
-        assert_eq!(s2.count("enemy"), 4); // recovered from the .bak
+        assert_eq!(s2.count(&CodexId::new("enemy")), 4);
         s2.store().delete();
         let _ = std::fs::remove_dir_all(&dir);
     }

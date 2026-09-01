@@ -84,3 +84,34 @@ impl MathUtils {
         Vec3::new(x, y, z)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn golden_smooth_damp() {
+        let (out, vel) = MathUtils::smooth_damp(0.0, 10.0, 0.0, 0.1, 0.016);
+        assert!((out - 0.414).abs() < 0.01, "out={out}");
+        assert!((vel - 46.47).abs() < 0.5, "vel={vel}");
+        // non-finite guard golden
+        let (o, v) = MathUtils::smooth_damp(f32::NAN, 10.0, 0.0, 0.1, 0.016);
+        assert_eq!(o, 10.0);
+        assert_eq!(v, 0.0);
+    }
+
+    #[test]
+    fn golden_approach() {
+        assert_eq!(MathUtils::approach(0.0, 10.0, 2.0), 2.0);
+        assert_eq!(MathUtils::approach(9.0, 10.0, 2.0), 10.0);
+        assert_eq!(MathUtils::approach(10.0, 0.0, 2.0), 8.0);
+        assert!(MathUtils::approach(f32::NAN, 10.0, 2.0).is_nan());
+    }
+
+    #[test]
+    fn golden_wave() {
+        assert!((MathUtils::wave(0.0, 10.0, 2.0, 0.0, 0.5) - 10.0).abs() < 1e-5);
+        assert!((MathUtils::wave(0.0, 10.0, 2.0, 0.0, 1.0) - 5.0).abs() < 1e-5);
+        assert_eq!(MathUtils::wave(0.0, 10.0, 0.0, 0.0, 1.0), 0.0);
+    }
+}
