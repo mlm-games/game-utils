@@ -155,363 +155,57 @@ impl FsStorage {
     }
 }
 
-/// On native platforms, `OpfsStorage` is not compiled; `FsStorage` is used directly.
+/// On wasm, `opfs::sync::Fs` is origin-private `localStorage` sync, on native it is `std::fs`.
 #[cfg(target_arch = "wasm32")]
-#[derive(Debug, Clone)]
-pub struct OpfsStorage {
-    mem: MemoryStorage,
-}
-
-#[cfg(target_arch = "wasm32")]
-impl Default for OpfsStorage {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-impl OpfsStorage {
-    pub fn new() -> Self {
-        let mem = MemoryStorage::new();
-        Self::hydrate_from_local_storage(&mem);
-        Self { mem }
-    }
-
-    fn ls_prefix() -> &'static str {
-        "opfs:"
-    }
-
-    fn to_ls_key(path: &Path) -> String {
-        let s = path.to_string_lossy().replace('\\', "/");
-        let s = s.trim_start_matches("./").trim_start_matches('/');
-        format!("{}{}", Self::ls_prefix(), s)
-    }
-
-    fn is_ls_key(key: &str) -> bool {
-        key.starts_with(Self::ls_prefix())
-    }
-
-    fn ls_key_to_path(key: &str) -> PathBuf {
-        PathBuf::from(&key[Self::ls_prefix().len()..])
-    }
-
-    fn local_storage() -> Option<web_sys::Storage> {
-        web_sys::window()?.local_storage().ok()?
-    }
-
-    fn hydrate_from_local_storage(mem: &MemoryStorage) {
-        let Some(ls) = Self::local_storage() else {
-            return;
-        };
-        let len = ls.length().ok().unwrap_or(0);
-        for i in 0..len {
-            let Ok(Some(key)) = ls.key(i) else {
-                continue;
-            };
-            if !Self::is_ls_key(&key) {
-                continue;
-            }
-            if key.ends_with("/__dir__") {
-                let dir_path = Self::ls_key_to_path(&key[..key.len() - "/__dir__".len()]);
-                let _ = mem.create_dir_all(&dir_path);
-                continue;
-            }
-            if let Ok(Some(v)) = ls.get_item(&key) {
-                let path = Self::ls_key_to_path(&key);
-                let _ = mem.write(&path, v.as_bytes());
-            }
-        }
-    }
-
-    fn ls_set(path: &Path, data: &[u8]) {
-        if let Some(ls) = Self::local_storage() {
-            let key = Self::to_ls_key(path);
-            let s = String::from_utf8_lossy(data).into_owned();
-            let _ = ls.set_item(&key, &s);
-        }
-    }
-
-    fn ls_remove(path: &Path) {
-        if let Some(ls) = Self::local_storage() {
-            let key = Self::to_ls_key(path);
-            let _ = ls.remove_item(&key);
-        }
-    }
-
-    fn ls_remove_prefix(prefix: &Path) {
-        if let Some(ls) = Self::local_storage() {
-            let prefix_key = Self::to_ls_key(prefix);
-            let mut to_remove = Vec::new();
-            let len = ls.length().ok().unwrap_or(0);
-            for i in 0..len {
-                if let Ok(Some(k)) = ls.key(i) {
-                    if k == prefix_key
-                        || k.starts_with(&format!("{}/", prefix_key))
-                        || k.starts_with(&prefix_key)
-                    {
-                        to_remove.push(k);
-                    }
-                }
-            }
-            for k in to_remove {
-                let _ = ls.remove_item(&k);
-            }
-        }
-    }
-
-    fn ls_exists(path: &Path) -> bool {
-        if let Some(ls) = Self::local_storage() {
-            let key = Self::to_ls_key(path);
-            if ls.get_item(&key).ok().flatten().is_some() {
-                return true;
-            }
-            let dir_key = format!("{}/__dir__", key);
-            if ls.get_item(&dir_key).ok().flatten().is_some() {
-                return true;
-            }
-            let prefix = format!("{}/", key);
-            let len = ls.length().ok().unwrap_or(0);
-            for i in 0..len {
-                if let Ok(Some(k)) = ls.key(i) {
-                    if k.starts_with(&prefix) {
-                        return true;
-                    }
-                }
-            }
-        }
-        false
-    }
-
-    fn ls_is_dir(path: &Path) -> bool {
-        if let Some(ls) = Self::local_storage() {
-            let key = Self::to_ls_key(path);
-            let dir_key = format!("{}/__dir__", key);
-            if ls.get_item(&dir_key).ok().flatten().is_some() {
-                return true;
-            }
-            let prefix = format!("{}/", key);
-            let len = ls.length().ok().unwrap_or(0);
-            for i in 0..len {
-                if let Ok(Some(k)) = ls.key(i) {
-                    if k.starts_with(&prefix) {
-                        return true;
-                    }
-                }
-            }
-        }
-        false
-    }
-}
+pub use opfs::sync::Fs as OpfsStorage;
 
 #[cfg(target_arch = "wasm32")]
 impl Storage for OpfsStorage {
     fn create_dir_all(&self, path: &Path) -> io::Result<()> {
-        self.mem.create_dir_all(path)?;
-        if let Some(ls) = Self::local_storage() {
-            let key = format!("{}/__dir__", Self::to_ls_key(path));
-            let _ = ls.set_item(&key, "1");
-        }
-        Ok(())
+        OpfsStorage::create_dir_all(self, path)
     }
     fn read(&self, path: &Path) -> io::Result<Option<Vec<u8>>> {
-        if let Ok(Some(v)) = self.mem.read(path) {
-            return Ok(Some(v));
-        }
-        if let Some(ls) = Self::local_storage() {
-            let key = Self::to_ls_key(path);
-            if let Ok(Some(s)) = ls.get_item(&key) {
-                let b = s.into_bytes();
-                let _ = self.mem.write(path, &b);
-                return Ok(Some(b));
-            }
-        }
-        Ok(None)
+        OpfsStorage::read(self, path)
     }
     fn write(&self, path: &Path, data: &[u8]) -> io::Result<()> {
-        self.mem.write(path, data)?;
-        Self::ls_set(path, data);
-        Ok(())
+        OpfsStorage::write(self, path, data)
     }
     fn rename(&self, from: &Path, to: &Path) -> io::Result<()> {
-        if !self.mem.exists(from) && Self::ls_exists(from) {
-            if let Some(ls) = Self::local_storage() {
-                let key = Self::to_ls_key(from);
-                if let Ok(Some(s)) = ls.get_item(&key) {
-                    let _ = self.mem.write(from, s.as_bytes());
-                }
-            }
-        }
-        self.mem.rename(from, to)?;
-        if let Some(ls) = Self::local_storage() {
-            let from_key = Self::to_ls_key(from);
-            let to_key = Self::to_ls_key(to);
-            if let Ok(Some(v)) = ls.get_item(&from_key) {
-                let _ = ls.set_item(&to_key, &v);
-                let _ = ls.remove_item(&from_key);
-            }
-            let from_dir = format!("{}/__dir__", from_key);
-            let to_dir = format!("{}/__dir__", to_key);
-            if let Ok(Some(v)) = ls.get_item(&from_dir) {
-                let _ = ls.set_item(&to_dir, &v);
-                let _ = ls.remove_item(&from_dir);
-            }
-            let prefix_from = format!("{}/", from_key);
-            let prefix_to = format!("{}/", to_key);
-            let mut moves = Vec::new();
-            let len = ls.length().ok().unwrap_or(0);
-            for i in 0..len {
-                if let Ok(Some(k)) = ls.key(i) {
-                    if k.starts_with(&prefix_from) {
-                        moves.push(k);
-                    } else if k.starts_with(&format!("{}/__dir__", from_key)) {
-                    }
-                }
-            }
-            for k in moves {
-                if let Ok(Some(v)) = ls.get_item(&k) {
-                    let rest = &k[prefix_from.len()..];
-                    let new_k = format!("{}{}", prefix_to, rest);
-                    let _ = ls.set_item(&new_k, &v);
-                    let _ = ls.remove_item(&k);
-                }
-            }
-        }
-        Ok(())
+        OpfsStorage::rename(self, from, to)
     }
     fn copy(&self, from: &Path, to: &Path) -> io::Result<u64> {
-        let n = self.mem.copy(from, to)?;
-        if let Some(data) = self.mem.read(to).ok().flatten() {
-            Self::ls_set(to, &data);
-        } else if let Some(ls) = Self::local_storage() {
-            let from_key = Self::to_ls_key(from);
-            let to_key = Self::to_ls_key(to);
-            if let Ok(Some(v)) = ls.get_item(&from_key) {
-                let _ = ls.set_item(&to_key, &v);
-            }
-        }
-        Ok(n)
+        OpfsStorage::copy(self, from, to)
     }
     fn remove_file(&self, path: &Path) -> io::Result<()> {
-        let mem_res = self.mem.remove_file(path);
-        Self::ls_remove(path);
-        if mem_res.is_ok() {
-            return Ok(());
-        }
-        if mem_res
-            .as_ref()
-            .err()
-            .is_some_and(|e| e.kind() == io::ErrorKind::NotFound)
-        {
-            return Ok(());
-        }
-        mem_res
+        OpfsStorage::remove_file(self, path)
     }
     fn remove_dir_all(&self, path: &Path) -> io::Result<()> {
-        let _ = self.mem.remove_dir_all(path);
-        Self::ls_remove_prefix(path);
-        Ok(())
+        OpfsStorage::remove_dir_all(self, path)
     }
     fn exists(&self, path: &Path) -> bool {
-        self.mem.exists(path) || Self::ls_exists(path)
+        OpfsStorage::exists(self, path)
     }
     fn is_dir(&self, path: &Path) -> bool {
-        self.mem.is_dir(path) || Self::ls_is_dir(path)
+        OpfsStorage::is_dir(self, path)
     }
     fn is_file(&self, path: &Path) -> bool {
-        if self.mem.is_file(path) {
-            return true;
-        }
-        if let Some(ls) = Self::local_storage() {
-            let key = Self::to_ls_key(path);
-            if ls.get_item(&key).ok().flatten().is_some() {
-                return true;
-            }
-        }
-        false
+        OpfsStorage::is_file(self, path)
     }
     fn metadata_len(&self, path: &Path) -> Option<u64> {
-        if let Some(n) = self.mem.metadata_len(path) {
-            return Some(n);
-        }
-        if let Some(ls) = Self::local_storage() {
-            let key = Self::to_ls_key(path);
-            if let Ok(Some(v)) = ls.get_item(&key) {
-                return Some(v.len() as u64);
-            }
-        }
-        None
+        OpfsStorage::metadata_len(self, path)
     }
     fn mtime_secs(&self, path: &Path) -> Option<u64> {
-        self.mem.mtime_secs(path).or_else(|| {
-            if Self::ls_exists(path) {
-                Some(now_secs())
-            } else {
-                None
-            }
-        })
+        OpfsStorage::mtime_secs(self, path)
     }
     fn read_dir(&self, path: &Path) -> io::Result<Vec<PathBuf>> {
-        if let Ok(v) = self.mem.read_dir(path) {
-            if !v.is_empty() {
-                return Ok(v);
-            }
-            if self.mem.is_dir(path) {
-            } else if !Self::ls_is_dir(path) && !Self::ls_exists(path) {
-                return Ok(v);
-            }
-        }
-        let prefix = format!("{}/", Self::to_ls_key(path));
-        let mut seen = std::collections::HashSet::new();
-        let mut out = Vec::new();
-        if let Ok(mem_entries) = self.mem.read_dir(path) {
-            for p in mem_entries {
-                if seen.insert(p.clone()) {
-                    out.push(p);
-                }
-            }
-        }
-        if let Some(ls) = Self::local_storage() {
-            let len = ls.length().ok().unwrap_or(0);
-            let base_key = Self::to_ls_key(path);
-            for i in 0..len {
-                if let Ok(Some(k)) = ls.key(i) {
-                    if k == base_key {
-                        continue;
-                    }
-                    if k.starts_with(&prefix) {
-                        let rest = &k[prefix.len()..];
-                        if let Some(first) = rest.split('/').next() {
-                            if first.is_empty() || first == "__dir__" {
-                                continue;
-                            }
-                            let child = path.join(first);
-                            if seen.insert(child.clone()) {
-                                out.push(child);
-                            }
-                        }
-                    }
-                    if k.ends_with("/__dir__") {
-                        let dir_path_str = &k[Self::ls_prefix().len()..k.len() - "/__dir__".len()];
-                        let dir_path = PathBuf::from(dir_path_str);
-                        if let Ok(rel) = dir_path.strip_prefix(path) {
-                            if let Some(first) = rel.components().next() {
-                                let child = path.join(first);
-                                if seen.insert(child.clone()) {
-                                    out.push(child);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        if out.is_empty() && !self.exists(path) {
-            return Err(io::Error::new(io::ErrorKind::NotFound, "dir not found"));
-        }
-        Ok(out)
+        OpfsStorage::read_dir(self, path)
     }
-    fn sync_file(&self, _path: &Path) {}
-    fn sync_dir(&self, _path: &Path) {}
+    fn sync_file(&self, path: &Path) {
+        OpfsStorage::sync_file(self, path)
+    }
+    fn sync_dir(&self, path: &Path) {
+        OpfsStorage::sync_dir(self, path)
+    }
 }
 /// In-memory `Storage` for hermetic tests. Shares an `Arc<RwLock<HashMap>>` so
 /// clones see the same files (mirrors `FsStorage` sharing the real FS).
