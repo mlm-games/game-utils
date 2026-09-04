@@ -12,4 +12,6 @@ pub mod unlock;
 pub mod weighted;
 
 pub use storage::{EncryptedStorage, FsStorage, MemoryStorage, Storage};
+#[cfg(target_arch = "wasm32")]
+pub use storage::OpfsStorage;
 pub use typed_id::{AchievementId, CategoryId, CodexId, StatId, TypedId, UnlockId};

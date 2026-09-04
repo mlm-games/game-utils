@@ -1,4 +1,3 @@
-use std::fs;
 use std::path::PathBuf;
 
 use serde::Serialize;
@@ -65,17 +64,27 @@ impl<S: Storage> SaveManager<S> {
     /// platforms where `ProjectDirs` is unavailable or `create_dir_all` is denied,
     /// rather than the previous `PathBuf("saves")` cwd-dependent fallback that lost
     /// saves when the working directory changed.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn data_dir(&self) -> PathBuf {
         if let Some(proj) = directories::ProjectDirs::from(self.qualifier, self.org, self.app) {
             let dir = proj.data_dir().to_path_buf();
-            if fs::create_dir_all(&dir).is_ok() {
+            if self.storage.create_dir_all(&dir).is_ok() {
                 return dir;
             }
         }
 
         let dir =
             std::env::temp_dir().join(format!("{}-{}-{}", self.qualifier, self.org, self.app));
-        let _ = fs::create_dir_all(&dir);
+        let _ = self.storage.create_dir_all(&dir);
+        dir
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn data_dir(&self) -> PathBuf {
+        // `opfs` `sync::Fs` hydrates from
+        // localStorage on first use, so this path is virtual but persistent.
+        let dir = PathBuf::from(format!("{}-{}-{}", self.qualifier, self.org, self.app));
+        let _ = self.storage.create_dir_all(&dir);
         dir
     }
 
