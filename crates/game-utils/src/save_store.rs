@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use web_time::{SystemTime, UNIX_EPOCH};
 
 use crate::storage::{FsStorage, Storage};
 
@@ -489,7 +489,9 @@ mod tests {
     #[test]
     fn is_intact_json_rejects_garbage_braces() {
         assert!(!SaveStore::<FsStorage>::is_intact_json(b"{garbage}}"));
-        assert!(!SaveStore::<FsStorage>::is_intact_json(b"{ \"a\": 1 } trailing"));
+        assert!(!SaveStore::<FsStorage>::is_intact_json(
+            b"{ \"a\": 1 } trailing"
+        ));
         assert!(SaveStore::<FsStorage>::is_intact_json(b"{\"a\":1}"));
         assert!(SaveStore::<FsStorage>::is_intact_json(b"  {\"a\": 1}  \n"));
         assert!(SaveStore::<FsStorage>::is_intact_json(b"[1,2,3]"));

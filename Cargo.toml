@@ -18,6 +18,7 @@ directories = "6"
 unic-langid = "0.9"
 fluent-bundle = "0.16"
 rand = "0.10"
+web-time = "1.1"
 bevy = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ffb6e5492ebb7c059ac8af", default-features = false, features = [
     "bevy_asset",
     "bevy_audio",

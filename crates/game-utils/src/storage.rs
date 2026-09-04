@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
-use std::time::{SystemTime, UNIX_EPOCH};
+use web_time::{SystemTime, UNIX_EPOCH};
 
 /// Trait for the underlying file system. Keep it `Clone` so `SaveStore` can stay `Clone`.
 pub trait Storage: Clone + Send + Sync + 'static {

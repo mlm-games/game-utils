@@ -319,7 +319,8 @@ impl<S: Storage> ProfileManager<S> {
         }
         self.active = idx;
         self.persist_pointer()?;
-        self.storage.create_dir_all(&self.profile_dir(self.active))?;
+        self.storage
+            .create_dir_all(&self.profile_dir(self.active))?;
         Ok(())
     }
 
@@ -433,9 +434,7 @@ impl<S: Storage> ProfileManager<S> {
         let backup = self.backup_dir().join(PRE_MIGRATION_BACKUP_DIR);
         self.storage.create_dir_all(&backup)?;
         for f in legacy {
-            let _ = self
-                .storage
-                .copy(&self.base_dir.join(f), &backup.join(f));
+            let _ = self.storage.copy(&self.base_dir.join(f), &backup.join(f));
         }
         let staging = self.base_dir.join("profile_1_migrating");
         let _ = self.storage.remove_dir_all(&staging);
@@ -510,15 +509,15 @@ fn validate_pointer(bytes: &[u8]) -> bool {
 
 #[allow(dead_code)]
 fn unix_now() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
+    web_time::SystemTime::now()
+        .duration_since(web_time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0)
 }
 
 fn unix_now_nanos() -> u128 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
+    web_time::SystemTime::now()
+        .duration_since(web_time::UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0)
 }

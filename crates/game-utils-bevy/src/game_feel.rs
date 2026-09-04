@@ -1,3 +1,5 @@
+use web_time::Duration;
+
 use bevy::input::gamepad::{Gamepad, GamepadRumbleIntensity, GamepadRumbleRequest};
 use bevy::prelude::*;
 
@@ -67,7 +69,7 @@ impl GameFeel {
             strong_motor: strong.clamp(0.0, 1.0),
             weak_motor: weak.clamp(0.0, 1.0),
         };
-        let duration = std::time::Duration::from_secs_f32(duration_secs.max(0.0));
+        let duration = Duration::from_secs_f32(duration_secs.max(0.0));
         for (entity, _) in gamepads.iter() {
             rumble_writer.write(GamepadRumbleRequest::Add {
                 gamepad: entity,
