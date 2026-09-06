@@ -24,9 +24,7 @@ bevy = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ff
     "bevy_audio",
     "bevy_camera",
     "bevy_color",
-    "bevy_core_pipeline",
     "bevy_log",
-    "bevy_render",
     "bevy_shader",
     "bevy_sprite",
     "bevy_state",
@@ -40,4 +38,17 @@ bevy = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ff
     "std",
     "async_executor",
 ] }
+# NOTE: `bevy_render` / `bevy_core_pipeline` (the wgpu backend) are intentionally
+# NOT in the base list above, so default builds stay wgpu-free and can coexist
+# with other wgpu versions (e.g. ../repose pins wgpu 30 directly).
+# They are enabled opt-in via `game-utils-bevy/render`
+# (`bevy/bevy_render`, `bevy/bevy_core_pipeline`).
+# Wgpu-free granular deps (same bevy rev) for crates that must not pull wgpu.
+bevy_ecs = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ffb6e5492ebb7c059ac8af" }
+bevy_app = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ffb6e5492ebb7c059ac8af" }
+bevy_time = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ffb6e5492ebb7c059ac8af" }
+bevy_math = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ffb6e5492ebb7c059ac8af" }
+bevy_transform = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ffb6e5492ebb7c059ac8af" }
 game-utils = { path = "crates/game-utils", version = "0.1.2" }
+game-utils-grid = { path = "crates/game-utils-grid", version = "0.1.2" }
+game-utils-inventory = { path = "crates/game-utils-inventory", version = "0.1.2" }

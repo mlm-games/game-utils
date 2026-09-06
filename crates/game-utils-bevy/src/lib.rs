@@ -8,6 +8,7 @@ pub mod i18n;
 pub mod juice;
 pub mod loading;
 pub mod pooling;
+#[cfg(feature = "render")]
 pub mod post_process;
 pub mod save;
 pub mod screen_effects;
@@ -62,17 +63,18 @@ impl<S: FreelyMutableState> Plugin for EcosystemPlugin<S> {
             hit_flash::HitFlashPlugin,
             hitstop::HitStopPlugin,
             juice::JuicePlugin,
-            post_process::ScreenEffectsPostProcessPlugin,
             ui_effects::UiEffectsPlugin,
             vfx::VfxPlugin,
-        ))
-        .add_systems(
-            Update,
-            (
-                post_process::ensure_screen_effect_settings,
-                post_process::sync_post_process_settings::<S>,
-            ),
-        );
+        ));
+        #[cfg(feature = "render")]
+        app.add_plugins(post_process::ScreenEffectsPostProcessPlugin)
+            .add_systems(
+                Update,
+                (
+                    post_process::ensure_screen_effect_settings,
+                    post_process::sync_post_process_settings::<S>,
+                ),
+            );
         #[cfg(feature = "audio")]
         app.add_plugins(audio::AudioPlugin);
         #[cfg(feature = "screen_effects")]

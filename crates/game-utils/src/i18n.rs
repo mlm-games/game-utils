@@ -12,14 +12,15 @@ pub fn load_ftl(locale: &str, ftl: &str, keys: &[&str]) -> (String, HashMap<Stri
         if bundle.add_resource(res).is_ok() {
             let mut map = HashMap::new();
             for key in keys {
-                if let Some(value) = bundle
-                    .get_message(key)
-                    .and_then(|msg| msg.value())
-                    .map(|pattern| {
-                        bundle
-                            .format_pattern(pattern, None, &mut Vec::new())
-                            .into_owned()
-                    })
+                if let Some(value) =
+                    bundle
+                        .get_message(key)
+                        .and_then(|msg| msg.value())
+                        .map(|pattern| {
+                            bundle
+                                .format_pattern(pattern, None, &mut Vec::new())
+                                .into_owned()
+                        })
                 {
                     map.insert(key.to_string(), value);
                 }

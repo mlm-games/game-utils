@@ -8,6 +8,11 @@ repository = { workspace = true }
 keywords = ["game", "gamedev", "utility", "save", "i18n", "random"]
 categories = ["game-development"]
 
+[features]
+default = []
+grid = ["dep:game-utils-grid"]
+inventory = ["dep:game-utils-inventory"]
+
 [dependencies]
 glam.workspace = true
 serde.workspace = true
@@ -18,6 +23,8 @@ directories.workspace = true
 rand.workspace = true
 unic-langid.workspace = true
 fluent-bundle.workspace = true
+game-utils-grid = { workspace = true, optional = true }
+game-utils-inventory = { workspace = true, optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 opfs = { git = "https://github.com/mlm-games/opfs" }

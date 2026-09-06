@@ -1,0 +1,13 @@
+[package]
+name = "game-utils-grid"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Pure grid primitives - coords, dense/sparse/bit storage, A*, flood fill, procgen"
+repository.workspace = true
+keywords = ["game", "grid", "tilemap", "pathfinding", "procgen"]
+categories = ["game-development"]
+
+[dependencies]
+serde.workspace = true
+rand.workspace = true

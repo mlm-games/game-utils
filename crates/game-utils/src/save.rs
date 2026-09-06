@@ -198,7 +198,7 @@ mod tests {
     }
 
     #[test]
-    fn save_versioned_stamps_version() {
+    fn save_versioned_roundtrip() {
         let dir = std::env::temp_dir().join(format!("game_utils_save_test_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let m = SaveManager::new("com", "testorg", "testapp_save_rs2", "stamped.ron", 5);

@@ -1,0 +1,15 @@
+[package]
+name = "game-utils-cards"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Pure card/deck primitives - piles, bags, hand layout, resource costs"
+repository.workspace = true
+keywords = ["game", "cards", "deck", "hand", "roguelike"]
+categories = ["game-development"]
+
+[dependencies]
+serde.workspace = true
+rand.workspace = true
+glam = { version = "0.33", features = ["serde"] }
+ron.workspace = true

@@ -23,7 +23,12 @@ transitions = []
 screen_effects = []
 pooling = []
 time_scale = []
-full = ["audio", "transitions", "screen_effects", "pooling", "time_scale"]
+# Opt-in wgpu backend (`bevy_render` + `bevy_core_pipeline`).
+# Everything else (ECS, sprites/UI/text types, audio, input, camera,
+# transform, state, time) builds wgpu-free and coexists with other
+# wgpu versions (e.g. repose). Only `post_process` needs this.
+render = ["bevy/bevy_render", "bevy/bevy_core_pipeline"]
+full = ["audio", "transitions", "screen_effects", "pooling", "time_scale", "render"]
 
 [lints.clippy]
 type_complexity = "allow"
