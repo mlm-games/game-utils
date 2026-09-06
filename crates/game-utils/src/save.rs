@@ -64,13 +64,32 @@ impl<S: Storage> SaveManager<S> {
     /// platforms where `ProjectDirs` is unavailable or `create_dir_all` is denied,
     /// rather than the previous `PathBuf("saves")` cwd-dependent fallback that lost
     /// saves when the working directory changed.
-    #[cfg(not(target_arch = "wasm32"))]
+    ///
+    /// On Android `ProjectDirs` is unusable (`directories` has no Android
+    /// support, `$HOME` unset) and `temp_dir()` is the OS-evictable cache
+    /// dir, so the stored runtime path (see [`set_android_data_dir`], called
+    /// from the game's `android_main` with `internal_data_path()`) wins;
+    /// temp is only the last resort.
+    #[cfg(all(not(target_arch = "wasm32"), not(target_os = "android")))]
     pub fn data_dir(&self) -> PathBuf {
         if let Some(proj) = directories::ProjectDirs::from(self.qualifier, self.org, self.app) {
             let dir = proj.data_dir().to_path_buf();
             if self.storage.create_dir_all(&dir).is_ok() {
                 return dir;
             }
+        }
+
+        let dir =
+            std::env::temp_dir().join(format!("{}-{}-{}", self.qualifier, self.org, self.app));
+        let _ = self.storage.create_dir_all(&dir);
+        dir
+    }
+
+    #[cfg(target_os = "android")]
+    pub fn data_dir(&self) -> PathBuf {
+        if let Some(dir) = crate::storage::android_runtime_dir() {
+            let _ = self.storage.create_dir_all(&dir);
+            return dir;
         }
 
         let dir =

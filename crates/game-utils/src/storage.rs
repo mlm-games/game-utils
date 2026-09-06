@@ -516,10 +516,17 @@ static ANDROID_DATA_DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new
 
 /// Record the runtime internal data dir (from
 /// `AndroidApp::internal_data_path()`) for [`android_data_dir`]. Call once
-/// from `android_main`. later calls are ignored.
+/// from `android_main`; later calls are ignored.
 #[cfg(target_os = "android")]
 pub fn set_android_data_dir(path: PathBuf) {
     let _ = ANDROID_DATA_DIR.set(path);
+}
+
+/// The stored runtime dir, if [`set_android_data_dir`] was called.
+/// `SaveManager` prefers this on Android without needing the package id.
+#[cfg(target_os = "android")]
+pub fn android_runtime_dir() -> Option<PathBuf> {
+    ANDROID_DATA_DIR.get().cloned()
 }
 
 pub fn android_fallback_dir(package: &str) -> PathBuf {
