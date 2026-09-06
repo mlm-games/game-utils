@@ -511,6 +511,37 @@ impl<S: Storage> Storage for EncryptedStorage<S> {
     }
 }
 
+#[cfg(target_os = "android")]
+static ANDROID_DATA_DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+/// Record the runtime internal data dir (from
+/// `AndroidApp::internal_data_path()`) for [`android_data_dir`]. Call once
+/// from `android_main`. later calls are ignored.
+#[cfg(target_os = "android")]
+pub fn set_android_data_dir(path: PathBuf) {
+    let _ = ANDROID_DATA_DIR.set(path);
+}
+
+pub fn android_fallback_dir(package: &str) -> PathBuf {
+    PathBuf::from(format!("/data/data/{package}/files"))
+}
+
+/// App-private data dir on Android: stored runtime path, then
+/// [`android_fallback_dir`], then the temp fallback. Never panics.
+#[cfg(target_os = "android")]
+pub fn android_data_dir(package: &str) -> PathBuf {
+    if let Some(dir) = ANDROID_DATA_DIR.get() {
+        return dir.clone();
+    }
+    let dir = android_fallback_dir(package);
+    if FsStorage.create_dir_all(&dir).is_ok() {
+        return dir;
+    }
+    let dir = std::env::temp_dir().join(package.replace('.', "-"));
+    let _ = FsStorage.create_dir_all(&dir);
+    dir
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -546,5 +577,13 @@ mod tests {
         s.rename(&base.join("a"), &base.join("b")).unwrap();
         assert!(!s.exists(&base.join("a/f.txt")));
         assert_eq!(s.read(&base.join("b/f.txt")).unwrap(), Some(b"x".to_vec()));
+    }
+
+    #[test]
+    fn android_fallback_dir_matches_godot_user_dir() {
+        assert_eq!(
+            android_fallback_dir("org.rozvp.app"),
+            PathBuf::from("/data/data/org.rozvp.app/files")
+        );
     }
 }

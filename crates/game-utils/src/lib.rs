@@ -27,5 +27,8 @@ pub use game_utils_quest as quest;
 
 #[cfg(target_arch = "wasm32")]
 pub use storage::OpfsStorage;
+pub use storage::android_fallback_dir;
 pub use storage::{EncryptedStorage, FsStorage, MemoryStorage, Storage};
+#[cfg(target_os = "android")]
+pub use storage::{android_data_dir, set_android_data_dir};
 pub use typed_id::{AchievementId, CategoryId, CodexId, StatId, TypedId, UnlockId};
