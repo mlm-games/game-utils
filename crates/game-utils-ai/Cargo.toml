@@ -1,0 +1,15 @@
+[package]
+name = "game-utils-ai"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Pure AI primitives - state machines, steering, perception, spawn direction, nav graphs"
+repository.workspace = true
+keywords = ["game", "ai", "fsm", "steering", "pathfinding"]
+categories = ["game-development"]
+
+[dependencies]
+serde.workspace = true
+rand.workspace = true
+glam = { version = "0.33", features = ["serde"] }
+pathfinding.workspace = true

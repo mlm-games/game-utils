@@ -12,6 +12,8 @@ pub mod unlock;
 pub mod weighted;
 
 // Genre crates re-exported behind features.
+#[cfg(feature = "ai")]
+pub use game_utils_ai as ai;
 #[cfg(feature = "combat")]
 pub use game_utils_combat as combat;
 #[cfg(feature = "grid")]
