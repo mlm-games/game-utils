@@ -1972,6 +1972,7 @@ dependencies = [
 name = "game-utils-combat"
 version = "0.1.2"
 dependencies = [
+ "glam 0.33.6",
  "rand",
  "serde",
 ]
