@@ -10,6 +10,8 @@ pub mod loading;
 pub mod pooling;
 #[cfg(feature = "render")]
 pub mod post_process;
+#[cfg(feature = "repose")]
+pub mod repose_overlay;
 pub mod save;
 pub mod screen_effects;
 pub mod time_scale;
@@ -25,8 +27,8 @@ pub use game_utils::{
 
 use std::marker::PhantomData;
 
-use bevy::prelude::*;
-use bevy::state::state::FreelyMutableState;
+use bevy_app::prelude::*;
+use bevy_state::state::FreelyMutableState;
 
 /// Bundles all bevy-specific game-feel plugins.
 ///

@@ -1,7 +1,13 @@
 use std::collections::HashMap;
 use std::collections::VecDeque;
 
-use bevy::prelude::*;
+use bevy_app::prelude::*;
+use bevy_asset::Handle;
+use bevy_audio::{AudioPlayer, AudioSink, AudioSinkPlayback, AudioSource, PlaybackSettings};
+use bevy_ecs::prelude::*;
+use bevy_math::Vec3;
+use bevy_time::{Time, Timer, TimerMode};
+use bevy_transform::components::Transform;
 use rand::RngExt;
 
 #[derive(Component)]
@@ -111,7 +117,7 @@ impl SfxPool {
         for _ in 0..self.max_concurrent {
             let e = commands
                 .spawn((
-                    PlaybackSettings::REMOVE.with_volume(bevy::audio::Volume::Linear(0.0)),
+                    PlaybackSettings::REMOVE.with_volume(bevy_audio::Volume::Linear(0.0)),
                     BaseVolume(0.0),
                     SfxChannel,
                 ))
@@ -152,7 +158,7 @@ impl SfxPool {
             // Not prewarming full ring here to avoid unbounded grow.
             let e = commands
                 .spawn((
-                    PlaybackSettings::REMOVE.with_volume(bevy::audio::Volume::Linear(0.0)),
+                    PlaybackSettings::REMOVE.with_volume(bevy_audio::Volume::Linear(0.0)),
                     BaseVolume(0.0),
                     SfxChannel,
                 ))
@@ -174,13 +180,13 @@ impl SfxPool {
         let mut ec = commands.entity(voice);
         ec.remove::<AudioPlayer<AudioSource>>();
         ec.remove::<PlaybackSettings>();
-        ec.remove::<bevy::audio::SpatialAudioSink>();
+        ec.remove::<bevy_audio::SpatialAudioSink>();
         ec.remove::<AudioSink>();
         ec.insert((
             BaseVolume(volume),
             AudioPlayer::new(handle.clone()),
             PlaybackSettings::REMOVE
-                .with_volume(bevy::audio::Volume::Linear(volume))
+                .with_volume(bevy_audio::Volume::Linear(volume))
                 .with_speed(pitch)
                 .with_spatial(true),
             Transform::from_translation(pos),
@@ -198,7 +204,7 @@ impl SfxPool {
             BaseVolume(volume),
             AudioPlayer::new(handle),
             PlaybackSettings::DESPAWN
-                .with_volume(bevy::audio::Volume::Linear(volume))
+                .with_volume(bevy_audio::Volume::Linear(volume))
                 .with_speed(pitch),
             UiChannel,
         ));
@@ -230,7 +236,7 @@ fn start_sfx_frame(
     for _ in 0..missing {
         let e = commands
             .spawn((
-                PlaybackSettings::REMOVE.with_volume(bevy::audio::Volume::Linear(0.0)),
+                PlaybackSettings::REMOVE.with_volume(bevy_audio::Volume::Linear(0.0)),
                 BaseVolume(0.0),
                 SfxChannel,
             ))
@@ -253,7 +259,7 @@ fn tick_music_fades(
         let x = 1.0 - (1.0 - t).powi(3);
         let vol = fade.from + (fade.to - fade.from) * x;
         base.0 = vol;
-        sink.set_volume(bevy::audio::Volume::Linear(vol * channels.music_volume()));
+        sink.set_volume(bevy_audio::Volume::Linear(vol * channels.music_volume()));
         if fade.timer.just_finished() {
             commands.entity(e).remove::<MusicFade>();
         }
@@ -267,7 +273,7 @@ impl AudioM {
         commands.spawn((
             BaseVolume(volume),
             AudioPlayer::new(handle),
-            PlaybackSettings::DESPAWN.with_volume(bevy::audio::Volume::Linear(volume)),
+            PlaybackSettings::DESPAWN.with_volume(bevy_audio::Volume::Linear(volume)),
             SfxChannel,
         ));
     }
@@ -284,7 +290,7 @@ impl AudioM {
             BaseVolume(volume),
             AudioPlayer::new(handle),
             PlaybackSettings::DESPAWN
-                .with_volume(bevy::audio::Volume::Linear(volume))
+                .with_volume(bevy_audio::Volume::Linear(volume))
                 .with_speed(pitch),
             SfxChannel,
         ));
@@ -302,7 +308,7 @@ impl AudioM {
         commands.spawn((
             BaseVolume(volume),
             AudioPlayer::new(handle),
-            PlaybackSettings::LOOP.with_volume(bevy::audio::Volume::Linear(volume)),
+            PlaybackSettings::LOOP.with_volume(bevy_audio::Volume::Linear(volume)),
             MusicChannel,
         ));
     }
@@ -317,7 +323,7 @@ impl AudioM {
         commands.spawn((
             BaseVolume(volume),
             AudioPlayer::new(handle),
-            PlaybackSettings::DESPAWN.with_volume(bevy::audio::Volume::Linear(volume)),
+            PlaybackSettings::DESPAWN.with_volume(bevy_audio::Volume::Linear(volume)),
             UiChannel,
         ));
     }
@@ -332,7 +338,7 @@ fn sync_channel_volumes(
             Option<&MusicChannel>,
             Option<&UiChannel>,
             Option<&mut AudioSink>,
-            Option<&mut bevy::audio::SpatialAudioSink>,
+            Option<&mut bevy_audio::SpatialAudioSink>,
         ),
         Without<MusicFade>,
     >,
@@ -349,10 +355,10 @@ fn sync_channel_volumes(
             channels.master
         };
         if let Some(mut s) = sink {
-            s.set_volume(bevy::audio::Volume::Linear(base * bus));
+            s.set_volume(bevy_audio::Volume::Linear(base * bus));
         }
         if let Some(mut s) = spatial {
-            s.set_volume(bevy::audio::Volume::Linear(base * bus));
+            s.set_volume(bevy_audio::Volume::Linear(base * bus));
         }
     }
 }

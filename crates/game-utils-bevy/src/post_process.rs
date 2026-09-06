@@ -1,27 +1,28 @@
 use std::collections::HashMap;
 
-use bevy::{
-    asset::{embedded_asset, load_embedded_asset},
-    core_pipeline::{
-        Core2dSystems, Core3dSystems, FullscreenShader,
-        schedule::{Core2d, Core3d},
-    },
-    prelude::*,
-    render::{
-        RenderApp, RenderStartup,
-        extract_component::{
-            ComponentUniforms, DynamicUniformIndex, ExtractComponent, ExtractComponentPlugin,
-            UniformComponentPlugin,
-        },
-        render_resource::{
-            binding_types::{sampler, texture_2d, uniform_buffer},
-            *,
-        },
-        renderer::{RenderContext, RenderDevice, ViewQuery},
-        view::ViewTarget,
-    },
-    state::state::FreelyMutableState,
+use bevy_app::prelude::*;
+use bevy_asset::{AssetServer, Handle, embedded_asset, load_embedded_asset};
+use bevy_camera::{Camera2d, Camera3d};
+use bevy_core_pipeline::{
+    Core2dSystems, Core3dSystems, FullscreenShader,
+    schedule::{Core2d, Core3d},
 };
+use bevy_ecs::prelude::*;
+use bevy_render::{
+    RenderApp, RenderStartup,
+    extract_component::{
+        ComponentUniforms, DynamicUniformIndex, ExtractComponent, ExtractComponentPlugin,
+        UniformComponentPlugin,
+    },
+    render_resource::{
+        binding_types::{sampler, texture_2d, uniform_buffer},
+        *,
+    },
+    renderer::{RenderContext, RenderDevice, ViewQuery},
+    view::ViewTarget,
+};
+use bevy_shader::Shader;
+use bevy_state::state::FreelyMutableState;
 
 use crate::screen_effects::{ChromaticAberration, FlashWhite};
 use crate::transitions::{CircleWipeDirection, Transition, TransitionKind};
@@ -131,9 +132,9 @@ fn init_screen_effect_pipeline(
                     blend: None,
                     write_mask: ColorWrites::ALL,
                 })],
-                ..default()
+                ..Default::default()
             }),
-            ..default()
+            ..Default::default()
         });
         pipelines.insert(format, pipeline_id);
     }
@@ -176,9 +177,9 @@ fn run_screen_effects(
                     blend: None,
                     write_mask: ColorWrites::ALL,
                 })],
-                ..default()
+                ..Default::default()
             }),
-            ..default()
+            ..Default::default()
         })
     });
 

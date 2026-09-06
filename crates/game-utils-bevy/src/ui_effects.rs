@@ -1,4 +1,9 @@
-use bevy::prelude::*;
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_math::Vec3;
+use bevy_time::{Time, Timer, TimerMode};
+use bevy_transform::components::Transform;
+use bevy_ui::{Interaction, widget::Text};
 
 #[derive(Component)]
 pub struct HoverScale {

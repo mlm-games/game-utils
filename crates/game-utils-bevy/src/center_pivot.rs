@@ -1,4 +1,5 @@
-use bevy::prelude::*;
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
 
 /// Marker component - Bevy sprites are already centered by default.
 /// Add this to a sprite entity if you want to track that it uses center pivot

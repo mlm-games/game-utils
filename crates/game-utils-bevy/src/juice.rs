@@ -1,4 +1,10 @@
-use bevy::prelude::*;
+use bevy_app::prelude::*;
+use bevy_color::Color;
+use bevy_ecs::prelude::*;
+use bevy_math::{Vec2, Vec3};
+use bevy_sprite::Sprite;
+use bevy_time::{Time, Timer, TimerMode};
+use bevy_transform::components::Transform;
 
 #[derive(Component)]
 pub struct PopIn {

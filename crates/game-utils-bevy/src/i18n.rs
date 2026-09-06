@@ -1,11 +1,25 @@
 use std::collections::HashMap;
 
-use bevy::prelude::*;
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
 use game_utils::i18n as core_i18n;
 
 /// Bevy resource wrapper around the bevy-agnostic [`core_i18n::LocaleResources`].
-#[derive(Resource, Deref, DerefMut)]
+#[derive(Resource)]
 pub struct LocaleResources(pub core_i18n::LocaleResources);
+
+impl std::ops::Deref for LocaleResources {
+    type Target = core_i18n::LocaleResources;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for LocaleResources {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
 /// Registers embedded FTL translations for each locale.
 ///

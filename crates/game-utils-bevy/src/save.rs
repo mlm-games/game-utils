@@ -1,7 +1,9 @@
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 
-use bevy::prelude::*;
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_input::{ButtonInput, keyboard::KeyCode};
 use game_utils::save::Versioned;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -79,14 +81,14 @@ fn hotkeys<T>(
 {
     if keys.just_pressed(KeyCode::F5) {
         if let Err(e) = manager.save(&*save) {
-            bevy::log::warn!("Save failed: {e}");
+            bevy_log::warn!("Save failed: {e}");
         } else {
-            bevy::log::info!("Game saved");
+            bevy_log::info!("Game saved");
         }
     }
     if keys.just_pressed(KeyCode::F9) {
         let loaded = manager.load::<T>();
         commands.insert_resource(loaded);
-        bevy::log::info!("Game loaded");
+        bevy_log::info!("Game loaded");
     }
 }

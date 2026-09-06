@@ -3,18 +3,40 @@ name = "game-utils-bevy"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Bevy game-feel utilities (juice, screen effects, transitions, vfx, pooled audio, entity pooling) extracted from existing games"
-repository = { workspace = true }
+description = "Bevy game-feel utilities (juice, screen effects, transitions, vfx, pooled audio, entity pooling) with bevy and repose wgpu post-process backends"
+repository.workspace = true
 keywords = ["bevy", "gamedev", "game-feel", "juice", "vfx"]
 categories = ["game-development"]
 publish = false
 
 [dependencies]
 game-utils.workspace = true
-bevy.workspace = true
 rand.workspace = true
 serde.workspace = true
 web-time.workspace = true
+bevy_app.workspace = true
+bevy_asset.workspace = true
+bevy_audio.workspace = true
+bevy_camera.workspace = true
+bevy_color.workspace = true
+bevy_core_pipeline = { workspace = true, optional = true }
+bevy_ecs.workspace = true
+bevy_input.workspace = true
+bevy_log.workspace = true
+bevy_math.workspace = true
+bevy_render = { workspace = true, optional = true }
+bevy_shader.workspace = true
+bevy_sprite.workspace = true
+bevy_state.workspace = true
+bevy_text.workspace = true
+bevy_time.workspace = true
+bevy_transform.workspace = true
+bevy_ui.workspace = true
+# Repose wgpu post-process backend (crates.io; same pin family as resims).
+repose-core = { version = "0.28.20", optional = true }
+repose-render-wgpu = { version = "0.28.20", optional = true }
+wgpu = { version = "30", optional = true }
+bytemuck = { version = "1", features = ["derive"], optional = true }
 
 [features]
 default = ["audio", "transitions", "screen_effects", "pooling", "time_scale"]
@@ -23,12 +45,10 @@ transitions = []
 screen_effects = []
 pooling = []
 time_scale = []
-# Opt-in wgpu backend (`bevy_render` + `bevy_core_pipeline`).
-# Everything else (ECS, sprites/UI/text types, audio, input, camera,
-# transform, state, time) builds wgpu-free and coexists with other
-# wgpu versions (e.g. repose). Only `post_process` needs this.
-render = ["bevy/bevy_render", "bevy/bevy_core_pipeline"]
-full = ["audio", "transitions", "screen_effects", "pooling", "time_scale", "render"]
+render = ["dep:bevy_render", "dep:bevy_core_pipeline"]
+# Fullscreen flash + circle-wipe overlay as a repose WgpuCallback.
+repose = ["dep:repose-core", "dep:repose-render-wgpu", "dep:wgpu", "dep:bytemuck"]
+full = ["audio", "transitions", "screen_effects", "pooling", "time_scale", "render", "repose"]
 
 [lints.clippy]
 type_complexity = "allow"

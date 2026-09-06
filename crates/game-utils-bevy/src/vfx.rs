@@ -1,4 +1,11 @@
-use bevy::prelude::*;
+use bevy_app::prelude::*;
+use bevy_color::{Alpha, Color};
+use bevy_ecs::prelude::*;
+use bevy_math::Vec2;
+use bevy_sprite::{Sprite, Text2d};
+use bevy_text::{FontSize, TextColor, TextFont, TextLayout};
+use bevy_time::{Time, Timer, TimerMode};
+use bevy_transform::components::Transform;
 use rand::RngExt;
 
 use crate::juice::Particle;
@@ -63,7 +70,7 @@ impl VfxSpawner {
             Text2d::new(amount.to_string()),
             TextFont {
                 font_size: FontSize::Px(cfg.font_size),
-                ..default()
+                ..Default::default()
             },
             TextColor(color),
             TextLayout::default(),
@@ -95,7 +102,7 @@ impl VfxSpawner {
                 Sprite {
                     color,
                     custom_size: Some(Vec2::splat(rng.random_range(3.0..7.0))),
-                    ..default()
+                    ..Default::default()
                 },
                 Transform::from_translation(pos.extend(5.0)),
                 Particle {
@@ -160,7 +167,7 @@ fn emit_trails(
                 Sprite {
                     color: Color::srgba(1.0, 1.0, 1.0, 0.6),
                     custom_size: Some(Vec2::splat(16.0)),
-                    ..default()
+                    ..Default::default()
                 },
                 Transform::from_translation(tf.translation.truncate().extend(1.0)),
                 TrailGhost {

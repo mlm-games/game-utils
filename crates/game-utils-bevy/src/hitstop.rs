@@ -1,4 +1,6 @@
-use bevy::prelude::*;
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_time::{Real, Time, Timer, TimerMode};
 
 use crate::time_scale::TimeScaleControl;
 

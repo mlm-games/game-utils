@@ -1,4 +1,6 @@
-use bevy::prelude::*;
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_time::{Time, Virtual};
 
 /// Single owner of `Time<Virtual>` relative speed + pause.
 #[derive(Resource)]

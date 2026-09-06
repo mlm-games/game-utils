@@ -1,5 +1,9 @@
-use bevy::prelude::*;
-use bevy::state::state::FreelyMutableState;
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_input::{ButtonInput, keyboard::KeyCode, mouse::MouseButton};
+use bevy_state::prelude::*;
+use bevy_state::state::FreelyMutableState;
+use bevy_time::{Real, Time};
 use std::marker::PhantomData;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

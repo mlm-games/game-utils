@@ -1,7 +1,11 @@
 use web_time::Duration;
 
-use bevy::input::gamepad::{Gamepad, GamepadRumbleIntensity, GamepadRumbleRequest};
-use bevy::prelude::*;
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_input::gamepad::{Gamepad, GamepadRumbleIntensity, GamepadRumbleRequest};
+use bevy_math::Vec2;
+use bevy_time::{Real, Time, Timer, TimerMode};
+use bevy_transform::components::Transform;
 
 use crate::time_scale::TimeScaleControl;
 

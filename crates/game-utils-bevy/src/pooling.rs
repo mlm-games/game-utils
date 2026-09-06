@@ -1,4 +1,5 @@
-use bevy::prelude::*;
+use bevy_camera::visibility::Visibility;
+use bevy_ecs::prelude::*;
 use std::collections::VecDeque;
 
 #[derive(Resource)]

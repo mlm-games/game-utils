@@ -1,6 +1,11 @@
 //! Damped camera follow with aim lookahead and zoom lerping.
 
-use bevy::prelude::*;
+use bevy_app::prelude::*;
+use bevy_camera::{Camera2d, Projection};
+use bevy_ecs::prelude::*;
+use bevy_math::Vec2;
+use bevy_time::Time;
+use bevy_transform::components::{GlobalTransform, Transform};
 
 use crate::screen_effects::CameraBase;
 
@@ -49,7 +54,7 @@ impl CameraFollow {
     pub fn new(target: Entity) -> Self {
         Self {
             target: Some(target),
-            ..default()
+            ..Default::default()
         }
     }
 
@@ -105,9 +110,8 @@ fn camera_follow_system(
             }
         }
         if let Projection::Orthographic(ortho) = projection.as_mut() {
-            ortho.scale = ortho
-                .scale
-                .lerp(follow.base_scale, framed_lerp(follow.zoom_speed, dt));
+            let t = framed_lerp(follow.zoom_speed, dt);
+            ortho.scale = ortho.scale + (follow.base_scale - ortho.scale) * t;
         }
     }
 }

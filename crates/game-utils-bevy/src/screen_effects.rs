@@ -1,4 +1,9 @@
-use bevy::prelude::*;
+use bevy_app::prelude::*;
+use bevy_camera::{Camera2d, Camera3d};
+use bevy_ecs::prelude::*;
+use bevy_math::{Quat, Vec2, Vec3};
+use bevy_time::{Real, Time, Timer, TimerMode};
+use bevy_transform::components::Transform;
 use rand::RngExt;
 
 use crate::time_scale::TimeScaleControl;
@@ -61,7 +66,7 @@ pub struct ImpactShake {
 
 impl ImpactShake {
     /// Add a directional impulse. `dir` packs strength into its length (Godot:
-    /// `G.main.screen_shake(dir * damage * 40.0)`); direction is jittered by ±22.5°
+    /// `G.main.screen_shake(dir * damage * 40.0)`); direction is jittered by +/-22.5 deg
     /// and the accumulated impulse is clamped.
     pub fn trigger(&mut self, dir: Vec2, cfg: &ImpactShakeConfig) {
         if dir.length_squared() <= 0.0 {

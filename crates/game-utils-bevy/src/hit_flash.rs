@@ -3,7 +3,13 @@
 //! to its original color. Add via [`HitFlash::apply`]; the system removes the
 //! component when the flash finishes.
 
-use bevy::prelude::*;
+use bevy_app::prelude::*;
+use bevy_color::{Color, Mix};
+use bevy_ecs::prelude::*;
+use bevy_sprite::Sprite;
+use bevy_text::TextColor;
+use bevy_time::{Time, Timer, TimerMode};
+use bevy_ui::BackgroundColor;
 
 #[derive(Component)]
 pub struct HitFlash {
