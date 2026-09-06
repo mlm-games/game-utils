@@ -195,7 +195,10 @@ mod tests {
 
     #[test]
     fn dodge_eats_everything() {
-        let d = Defense { dodge: 1.0, ..Default::default() };
+        let d = Defense {
+            dodge: 1.0,
+            ..Default::default()
+        };
         let r = exchange(&mut rng(), &Attack::new(99.0, "x"), &d, true);
         assert!(r.dodged && r.dealt == 0.0 && r.applied.is_empty());
     }
