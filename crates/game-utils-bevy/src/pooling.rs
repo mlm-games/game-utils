@@ -92,7 +92,10 @@ impl ObjectPool {
     }
 
     /// Drop dead entities from both lists (call once per frame if desired).
-    pub fn scrub<M: Component + Default>(pool: &mut EntityPool<M>, exists: impl Fn(Entity) -> bool) {
+    pub fn scrub<M: Component + Default>(
+        pool: &mut EntityPool<M>,
+        exists: impl Fn(Entity) -> bool,
+    ) {
         pool.available.retain(|&e| exists(e));
         pool.active.retain(|&e| exists(e));
     }

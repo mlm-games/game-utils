@@ -1,0 +1,13 @@
+[package]
+name = "game-utils-progression"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Pure progression primitives - xp curves, levels, upgrade drafts with reroll and banish"
+repository.workspace = true
+keywords = ["game", "xp", "levels", "roguelike", "upgrades"]
+categories = ["game-development"]
+
+[dependencies]
+serde.workspace = true
+rand.workspace = true

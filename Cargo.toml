@@ -50,5 +50,9 @@ bevy_time = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359
 bevy_math = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ffb6e5492ebb7c059ac8af" }
 bevy_transform = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ffb6e5492ebb7c059ac8af" }
 game-utils = { path = "crates/game-utils", version = "0.1.2" }
+game-utils-combat = { path = "crates/game-utils-combat", version = "0.1.2" }
 game-utils-grid = { path = "crates/game-utils-grid", version = "0.1.2" }
 game-utils-inventory = { path = "crates/game-utils-inventory", version = "0.1.2" }
+game-utils-progression = { path = "crates/game-utils-progression", version = "0.1.2" }
+game-utils-quest = { path = "crates/game-utils-quest", version = "0.1.2" }
+bubbles-dialogue = "2"

@@ -1,0 +1,13 @@
+[package]
+name = "game-utils-combat"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Pure combat primitives - health, damage mitigation, buffs, cooldowns, damage over time"
+repository.workspace = true
+keywords = ["game", "combat", "health", "buff", "rpg"]
+categories = ["game-development"]
+
+[dependencies]
+serde.workspace = true
+rand.workspace = true

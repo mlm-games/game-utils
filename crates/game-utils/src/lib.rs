@@ -12,10 +12,16 @@ pub mod unlock;
 pub mod weighted;
 
 // Genre crates re-exported behind features.
+#[cfg(feature = "combat")]
+pub use game_utils_combat as combat;
 #[cfg(feature = "grid")]
 pub use game_utils_grid as grid;
 #[cfg(feature = "inventory")]
 pub use game_utils_inventory as inventory;
+#[cfg(feature = "progression")]
+pub use game_utils_progression as progression;
+#[cfg(feature = "quest")]
+pub use game_utils_quest as quest;
 
 #[cfg(target_arch = "wasm32")]
 pub use storage::OpfsStorage;

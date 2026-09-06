@@ -1,0 +1,13 @@
+[package]
+name = "game-utils-quest"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Pure quest and dialogue primitives - objectives, stages, tracked quests, dialogue graphs"
+repository.workspace = true
+keywords = ["game", "quest", "dialogue", "objectives", "rpg"]
+categories = ["game-development"]
+
+[dependencies]
+serde.workspace = true
+bubbles-dialogue.workspace = true
