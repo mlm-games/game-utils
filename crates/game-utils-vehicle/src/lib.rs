@@ -8,7 +8,7 @@
 //!   [`body::BodyState`] integrator.
 //! - [`ai`], [`race`], [`track`], [`replay`], [`draft`]: racing logic.
 //!
-//! Pure logic everywhere; `bevy` adds components/systems, `rapier`
+//! Pure logic everywhere; `repame-sim` adds components/systems, `rapier`
 //! adds a rapier3d ground probe.
 
 pub mod ai;
@@ -34,8 +34,7 @@ pub mod track;
 pub mod tuning;
 pub mod wheel;
 
-#[cfg(feature = "bevy")]
-pub mod bevy_integration;
+pub mod repame_integration;
 
 pub use ai::{AiConfig, AiOutput, Path, pursue};
 pub use arcade::{ArcadeConfig, ArcadeState, SurfaceMod};

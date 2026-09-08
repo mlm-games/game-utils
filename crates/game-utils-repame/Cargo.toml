@@ -1,0 +1,21 @@
+[package]
+name = "game-utils-repame"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Repame (repose stack) game-feel utilities: sim time scales, hitstop, recoil/juice math, entity pooling, save/i18n/loading resources over repame-sim"
+repository.workspace = true
+keywords = ["repame", "repose", "gamedev", "game-feel", "sim"]
+categories = ["game-development"]
+publish = false
+
+[dependencies]
+game-utils.workspace = true
+bevy_ecs = "0.19"
+repame-sim.workspace = true
+glam.workspace = true
+serde.workspace = true
+web-time.workspace = true
+
+[lints.clippy]
+type_complexity = "allow"

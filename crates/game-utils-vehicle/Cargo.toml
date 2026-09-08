@@ -10,17 +10,12 @@ categories = ["game-development", "simulation"]
 
 [features]
 default = []
-# Wgpu-free: only ECS + app scheduling + time + transform (no render/window/audio).
-bevy = ["dep:bevy_ecs", "dep:bevy_app", "dep:bevy_time", "dep:bevy_math", "dep:bevy_transform"]
 # rapier3d scene queries as a GroundProbe source (suspension raycasts).
 rapier = ["dep:rapier3d"]
 
 [dependencies]
 glam = { version = "0.33", features = ["serde"] }
 serde.workspace = true
+bevy_ecs = "0.19"
+repame-sim.workspace = true
 rapier3d = { version = "0.34", optional = true, default-features = false, features = ["dim3", "f32", "std", "enhanced-determinism"] }
-bevy_ecs = { workspace = true, optional = true }
-bevy_app = { workspace = true, optional = true }
-bevy_time = { workspace = true, optional = true }
-bevy_math = { workspace = true, optional = true }
-bevy_transform = { workspace = true, optional = true }

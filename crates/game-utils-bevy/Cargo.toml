@@ -32,9 +32,9 @@ bevy_text.workspace = true
 bevy_time.workspace = true
 bevy_transform.workspace = true
 bevy_ui.workspace = true
-# Repose wgpu post-process backend (crates.io; same pin family as resims).
-repose-core = { version = "0.28.20", optional = true }
-repose-render-wgpu = { version = "0.28.20", optional = true }
+# NOTE: frozen for Bevy/`repose-bevy` games, new repame work goes in game-utils-repame.
+repose-core = { version = "0.29", optional = true }
+repose-render-wgpu = { version = "0.29", optional = true }
 wgpu = { version = "30", optional = true }
 bytemuck = { version = "1", features = ["derive"], optional = true }
 
