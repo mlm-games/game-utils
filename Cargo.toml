@@ -3,7 +3,7 @@ members = ["crates/*"]
 resolver = "3"
 
 [workspace.package]
-version = "0.3.0"
+version = "0.3.1"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/mlm-games/game-utils"
@@ -63,15 +63,15 @@ bevy_sprite = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b3
 bevy_state = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ffb6e5492ebb7c059ac8af" }
 bevy_text = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ffb6e5492ebb7c059ac8af" }
 bevy_ui = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ffb6e5492ebb7c059ac8af" }
-game-utils = { path = "crates/game-utils", version = "0.3.0" }
-game-utils-ai = { path = "crates/game-utils-ai", version = "0.3.0" }
-game-utils-combat = { path = "crates/game-utils-combat", version = "0.3.0" }
-game-utils-grid = { path = "crates/game-utils-grid", version = "0.3.0" }
-game-utils-inventory = { path = "crates/game-utils-inventory", version = "0.3.0" }
-game-utils-progression = { path = "crates/game-utils-progression", version = "0.3.0" }
-game-utils-quest = { path = "crates/game-utils-quest", version = "0.3.0" }
-game-utils-vehicle = { path = "crates/game-utils-vehicle", version = "0.3.0" }
-game-utils-repame = { path = "crates/game-utils-repame", version = "0.3.0" }
+game-utils = { path = "crates/game-utils", version = "0.3.1" }
+game-utils-ai = { path = "crates/game-utils-ai", version = "0.3.1" }
+game-utils-combat = { path = "crates/game-utils-combat", version = "0.3.1" }
+game-utils-grid = { path = "crates/game-utils-grid", version = "0.3.1" }
+game-utils-inventory = { path = "crates/game-utils-inventory", version = "0.3.1" }
+game-utils-progression = { path = "crates/game-utils-progression", version = "0.3.1" }
+game-utils-quest = { path = "crates/game-utils-quest", version = "0.3.1" }
+game-utils-vehicle = { path = "crates/game-utils-vehicle", version = "0.3.1" }
+game-utils-repame = { path = "crates/game-utils-repame", version = "0.3.1" }
 repame-sim = "0.1"
 repame-fx = "0.1"
 bubbles-dialogue = "2"
