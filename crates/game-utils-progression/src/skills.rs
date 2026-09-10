@@ -75,8 +75,17 @@ impl SkillSet {
         Ok(r)
     }
 
-    /// Refund one rank, returning the point. False when untrained.
-    pub fn refund(&mut self, id: &str) -> bool {
+    /// Refund one rank, returning the point. False when untrained, or when
+    /// a still-trained skill requires `id` (refunding would orphan the
+    /// dependent: `fire` rank 1 with parent `root` rank 0). Needs the def
+    /// list to find dependents.
+    pub fn refund(&mut self, defs: &[SkillDef], id: &str) -> bool {
+        if defs
+            .iter()
+            .any(|d| d.id != id && d.requires.iter().any(|r| r == id) && self.rank(&d.id) > 0)
+        {
+            return false;
+        }
         match self.ranks.get_mut(id) {
             Some(r) if *r > 0 => {
                 *r -= 1;
@@ -121,8 +130,20 @@ mod tests {
         let ds = defs();
         let mut s = SkillSet::new(1);
         s.spend(&ds[0]).unwrap();
-        assert!(s.refund("root"));
+        assert!(s.refund(&ds, "root"));
         assert_eq!((s.points, s.rank("root")), (1, 0));
-        assert!(!s.refund("root"));
+        assert!(!s.refund(&ds, "root"));
+    }
+
+    #[test]
+    fn refund_refuses_orphaning_dependents() {
+        let ds = defs();
+        let mut s = SkillSet::new(2);
+        s.spend(&ds[0]).unwrap();
+        s.spend(&ds[1]).unwrap();
+        assert!(!s.refund(&ds, "root"));
+        assert_eq!(s.rank("root"), 1);
+        assert!(s.refund(&ds, "fire"));
+        assert!(s.refund(&ds, "root"));
     }
 }

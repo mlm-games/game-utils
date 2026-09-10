@@ -34,8 +34,15 @@ impl Default for HitStop {
 impl HitStop {
     /// Dip virtual time to `scale` immediately, then recover to normal speed over
     /// `recover_secs` real seconds. (need to extract out trans)
+    /// Re-triggers keep the strongest effect: a weaker-or-equal call
+    /// mid-freeze is ignored (it must never speed time back up), while a
+    /// stronger one takes over with a fresh recovery.
     pub fn trigger(&mut self, scale: f32, recover_secs: f32) {
-        self.start_scale = scale.clamp(0.01, 1.0);
+        let scale = scale.clamp(0.01, 1.0);
+        if self.active && scale >= self.scale {
+            return;
+        }
+        self.start_scale = scale;
         self.scale = self.start_scale;
         self.recover = Timer::from_seconds(recover_secs.max(0.0), TimerMode::Once);
         self.active = true;
@@ -76,6 +83,7 @@ pub struct HitStopPlugin;
 impl Plugin for HitStopPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<HitStop>()
+            .init_resource::<crate::time_scale::TimeScaleControl>()
             .add_systems(Update, tick_hitstop);
     }
 }

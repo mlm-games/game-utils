@@ -316,7 +316,7 @@ impl WheelState {
             }
         }
 
-        let force = wheel_fwd * fx + wheel_right * fy * help + (-down) * spring_force;
+        let force = wheel_fwd * fx + wheel_right * fy + (-down) * spring_force;
         Some(WheelForce {
             force,
             point: contact,

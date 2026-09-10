@@ -49,8 +49,8 @@ impl Level {
         }
         self.xp += (amount as f32 * mult) as u32;
         let mut gained = 0;
-        while self.xp >= need_for(curve, self.level) {
-            self.xp -= need_for(curve, self.level);
+        while self.xp >= need_for(curve, self.level).max(1) {
+            self.xp -= need_for(curve, self.level).max(1);
             self.level += 1;
             gained += 1;
         }
@@ -134,6 +134,13 @@ mod tests {
         assert_eq!(l.gain(&c, 25, 1.0), 2);
         assert_eq!((l.level, l.xp), (3, 5));
         assert_eq!(l.gain(&c, 10, 0.5), 1);
+    }
+
+    #[test]
+    fn zero_cost_curve_terminates() {
+        let mut l = Level::new();
+        assert_eq!(l.gain(&Curve::Linear(0), 10, 1.0), 10);
+        assert_eq!((l.level, l.xp), (11, 0));
     }
 
     #[test]

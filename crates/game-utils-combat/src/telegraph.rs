@@ -73,13 +73,19 @@ impl Telegraph {
     }
 
     /// Advance. Returns true on the step the hit lands (windup elapsed).
+    /// Leftover time carries into recovery, so one large tick under
+    /// lag/slow-mo cannot park the telegraph in recovery too long.
     pub fn tick(&mut self, dt: f32) -> bool {
         self.t += dt.max(0.0);
         match self.phase {
             Phase::Idle => false,
             Phase::Winding if self.t >= self.windup => {
                 self.phase = Phase::Recovering;
-                self.t = 0.0;
+                self.t -= self.windup;
+                if self.t >= self.recover {
+                    self.phase = Phase::Idle;
+                    self.t = 0.0;
+                }
                 true
             }
             Phase::Recovering if self.t >= self.recover => {
@@ -116,5 +122,13 @@ mod tests {
         t.start();
         assert!(t.cancel());
         assert_eq!((t.phase(), t.progress()), (Phase::Idle, 1.0));
+    }
+
+    #[test]
+    fn huge_tick_carries_into_recovery() {
+        let mut t = Telegraph::new(0.5, 0.3);
+        t.start();
+        assert!(t.tick(10.0));
+        assert_eq!(t.phase(), Phase::Idle);
     }
 }

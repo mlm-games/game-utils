@@ -76,6 +76,7 @@ impl DriftState {
             return;
         }
         if !want_drift {
+            self.active = false;
             return;
         }
         self.charge += dt;

@@ -258,7 +258,10 @@ impl SlotInventory {
     }
 
     /// Merge stacks and group by id, preserving first-seen order.
-    pub fn compact(&mut self, reg: &ItemRegistry) {
+    /// Returns stacks that no longer fit (e.g. the stack limit was
+    /// lowered or more units were deserialized than slots hold) instead
+    /// of silently deleting them; the caller decides (drop, stash, mail).
+    pub fn compact(&mut self, reg: &ItemRegistry) -> Vec<ItemStack> {
         let mut order: Vec<ItemId> = Vec::new();
         let mut totals: Vec<(ItemId, Option<crate::item::Condition>, u32)> = Vec::new();
         for slot in self.slots.iter_mut() {
@@ -270,15 +273,17 @@ impl SlotInventory {
                     .iter_mut()
                     .find(|(id, c, _)| *id == st.def && *c == st.condition)
                 {
-                    Some(e) => e.2 += st.qty,
+                    Some(e) => e.2 = e.2.saturating_add(st.qty),
                     None => totals.push((st.def, st.condition, st.qty)),
                 }
             }
         }
         totals.sort_by_key(|(id, _, _)| order.iter().position(|o| o == id).unwrap_or(usize::MAX));
         let mut i = 0;
+        let mut overflow = Vec::new();
         for (id, cond, mut qty) in totals {
             let lim = reg.def(&id).map(|d| d.stack_limit()).unwrap_or(u32::MAX);
+            let lim = lim.max(1);
             while qty > 0 && i < self.slots.len() {
                 let take = lim.min(qty);
                 self.slots[i] = Some(ItemStack {
@@ -289,8 +294,15 @@ impl SlotInventory {
                 qty -= take;
                 i += 1;
             }
-            // Overflow past capacity is dropped (compact targets fitted bags).
+            if qty > 0 {
+                overflow.push(ItemStack {
+                    def: id,
+                    qty,
+                    condition: cond,
+                });
+            }
         }
+        overflow
     }
 }
 
@@ -369,6 +381,21 @@ mod tests {
         inv.compact(&r);
         assert_eq!(inv.get(0).unwrap().def, ItemId::from("herb"));
         assert_eq!(inv.get(1).unwrap().def, ItemId::from("sword"));
+    }
+
+    #[test]
+    fn compact_returns_overflow_instead_of_deleting() {
+        let r = reg();
+        let mut inv = SlotInventory::new(1);
+        inv.slots[0] = Some(ItemStack {
+            def: ItemId::from("herb"),
+            qty: 14,
+            condition: None,
+        });
+        let overflow = inv.compact(&r);
+        assert_eq!(inv.count(&ItemId::from("herb")), 7);
+        assert_eq!(overflow.len(), 1);
+        assert_eq!(overflow[0].qty, 7);
     }
 
     #[test]

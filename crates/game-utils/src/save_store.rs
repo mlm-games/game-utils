@@ -200,7 +200,29 @@ impl<S: Storage> SaveStore<S> {
         let bak_path = self.bak_path();
 
         if self.storage.exists(&temp_path) {
-            self.quarantine_corrupt_file(&temp_path);
+            let temp_ok = self
+                .storage
+                .read(&temp_path)
+                .ok()
+                .flatten()
+                .is_some_and(|b| (self.validate)(&b));
+            if !temp_ok {
+                self.quarantine_corrupt_file(&temp_path);
+            } else {
+                let target_ok = self
+                    .storage
+                    .read(&target_path)
+                    .ok()
+                    .flatten()
+                    .is_some_and(|b| (self.validate)(&b));
+                if target_ok {
+                    let _ = self.storage.remove_file(&temp_path);
+                } else if self.storage.rename(&temp_path, &target_path).is_err() {
+                    self.quarantine_corrupt_file(&temp_path);
+                } else {
+                    self.storage.sync_dir(&self.dir);
+                }
+            }
         }
 
         self.storage

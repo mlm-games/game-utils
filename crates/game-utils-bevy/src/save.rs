@@ -77,12 +77,14 @@ fn hotkeys<T>(
     manager: Res<SaveManager>,
     mut commands: Commands,
 ) where
-    T: Resource + Serialize + DeserializeOwned + Versioned + Default,
+    T: Resource + Clone + Serialize + DeserializeOwned + Versioned + Default,
 {
     if keys.just_pressed(KeyCode::F5) {
-        if let Err(e) = manager.save(&*save) {
+        let mut data = (*save).clone();
+        if let Err(e) = manager.save_versioned(&mut data) {
             bevy_log::warn!("Save failed: {e}");
         } else {
+            commands.insert_resource(data);
             bevy_log::info!("Game saved");
         }
     }

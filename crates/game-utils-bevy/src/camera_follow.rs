@@ -10,9 +10,11 @@ use bevy_transform::components::{GlobalTransform, Transform};
 use crate::screen_effects::CameraBase;
 
 /// Frame-rate-independent lerp factor equivalent to Godot's per-physics-frame
-/// `lerp(a, b, weight)` at 60 tps.
+/// `lerp(a, b, weight)` at 60 tps. `weight` is clamped to `0..1`: outside
+/// it the factor goes negative/past-one and `lerp` extrapolates (camera
+/// ping-pongs across the target instead of settling).
 fn framed_lerp(weight: f32, dt: f32) -> f32 {
-    1.0 - (1.0 - weight).powf((dt * 60.0).max(0.0))
+    1.0 - (1.0 - weight.clamp(0.0, 1.0)).powf((dt * 60.0).max(0.0))
 }
 
 #[derive(Component)]
@@ -92,6 +94,9 @@ fn camera_follow_system(
                 Ok(gt) => {
                     let target_pos = gt.translation().truncate();
                     let desired_aim = follow.aim_point.unwrap_or(target_pos);
+                    if follow.smooth_aim == Vec2::ZERO {
+                        follow.smooth_aim = desired_aim;
+                    }
                     follow.smooth_aim = follow
                         .smooth_aim
                         .lerp(desired_aim, framed_lerp(follow.aim_weight, dt));

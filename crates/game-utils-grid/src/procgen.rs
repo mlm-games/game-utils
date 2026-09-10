@@ -68,7 +68,7 @@ pub fn place_rooms(rng: &mut impl Rng, spec: RoomSpec) -> Vec<Rect> {
         for _ in 0..spec.attempts.max(1) {
             let w = rng.random_range(spec.min_w..=spec.max_w.max(spec.min_w)) as i32;
             let h = rng.random_range(spec.min_h..=spec.max_h.max(spec.min_h)) as i32;
-            if w >= spec.area_w as i32 || h >= spec.area_h as i32 {
+            if w > spec.area_w as i32 || h > spec.area_h as i32 {
                 continue;
             }
             let r = Rect::new(
@@ -112,7 +112,7 @@ pub fn cellular_step(
 }
 
 /// Drunkard walk: carve `set_to` along `steps` random king-moves from
-/// `from`, clamped in bounds. Returns the end cell.
+/// `from` (inclusive), clamped in bounds. Returns the end cell.
 pub fn tunnel_walk(
     rng: &mut impl Rng,
     grid: &mut DenseGrid<bool>,
@@ -120,12 +120,9 @@ pub fn tunnel_walk(
     steps: usize,
     set_to: bool,
 ) -> GridPos {
+    grid.set(from, set_to);
     for _ in 0..steps {
-        let (dx, dy) = if rng.random_bool(0.5) {
-            (rng.random_range(-1..=1), 0)
-        } else {
-            (0, rng.random_range(-1..=1))
-        };
+        let (dx, dy) = crate::pos::DIRS8[rng.random_range(0..crate::pos::DIRS8.len())];
         from = GridPos::new(
             (from.x + dx).clamp(0, grid.w as i32 - 1),
             (from.y + dy).clamp(0, grid.h as i32 - 1),
@@ -157,6 +154,24 @@ mod tests {
             margin: 1,
             attempts: 20,
         }
+    }
+
+    #[test]
+    fn exact_fit_room_is_placed() {
+        let spec = RoomSpec {
+            area_w: 10,
+            area_h: 10,
+            count: 2,
+            min_w: 10,
+            min_h: 10,
+            max_w: 10,
+            max_h: 10,
+            margin: 0,
+            attempts: 5,
+        };
+        let rooms = place_rooms(&mut rng(), spec);
+        assert_eq!(rooms.len(), 1);
+        assert_eq!((rooms[0].w, rooms[0].h), (10, 10));
     }
 
     #[test]

@@ -91,14 +91,14 @@ impl Equipment {
         if !self.slots[si].accepts_def(reg, &stack) {
             return Err(EquipError::RejectedTag);
         }
-        if let Some(prev) = &self.slots[si].stack
-            && bag.free_for(reg, &prev.def, prev.condition) < prev.qty
-        {
-            return Err(EquipError::NoRoom);
-        }
-        let _ = bag.remove(idx, u32::MAX);
-        let old = self.slots[si].stack.replace(stack);
+        let taken = bag.remove(idx, u32::MAX).ok_or(EquipError::EmptySlot)?;
+        let old = self.slots[si].stack.replace(taken);
         if let Some(prev) = old {
+            if bag.free_for(reg, &prev.def, prev.condition) < prev.qty {
+                let back = self.slots[si].stack.replace(prev);
+                let _ = bag.insert(reg, back.expect("just equipped"));
+                return Err(EquipError::NoRoom);
+            }
             let left = bag.insert(reg, prev);
             debug_assert_eq!(left, 0);
         }
@@ -182,6 +182,22 @@ mod tests {
         );
         assert!(gear.equip(&r, &mut bag, 0, "head").is_ok());
         assert!(bag.is_empty());
+    }
+
+    #[test]
+    fn full_bag_swap_uses_freed_slot() {
+        let r = reg();
+        let mut bag = SlotInventory::new(1);
+        bag.insert(&r, ItemStack::new("sword", 1));
+        let mut gear = gear();
+        gear.equip(&r, &mut bag, 0, "hand").unwrap();
+        bag.insert(&r, ItemStack::new("sword", 1));
+        assert!(gear.equip(&r, &mut bag, 0, "hand").is_ok());
+        assert_eq!(bag.count(&ItemId::from("sword")), 1);
+        assert_eq!(
+            gear.get("hand").unwrap().stack.as_ref().unwrap().def,
+            ItemId::from("sword")
+        );
     }
 
     #[test]

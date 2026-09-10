@@ -32,11 +32,14 @@ impl Weighted {
     /// Pick an index from `weights`, where the probability of `i` is `weights[i] / sum`.
     /// Returns `None` for an empty, non-positive-sum, or non-finite-weight slice
     /// (guards `NaN`/`inf` which would otherwise panic in `random_range`).
+    /// Negative weights also return `None`: subtracting a negative adds to
+    /// the roll and silently biases every other entry (consistent with
+    /// `pick_stable_top_n`, which skips `w <= 0`).
     pub fn pick_index<R: Rng + ?Sized>(rng: &mut R, weights: &[f32]) -> Option<usize> {
         if weights.is_empty() {
             return None;
         }
-        if weights.iter().any(|w| !w.is_finite()) {
+        if weights.iter().any(|w| !w.is_finite() || *w < 0.0) {
             return None;
         }
         let total: f32 = weights.iter().sum();
@@ -188,6 +191,12 @@ mod tests {
         }
         assert_eq!(Weighted::pick_index(&mut rng(), &[0.0, 0.0]), None);
         assert_eq!(Weighted::pick_index(&mut rng(), &[]), None);
+    }
+
+    #[test]
+    fn pick_index_rejects_negatives() {
+        assert_eq!(Weighted::pick_index(&mut rng(), &[2.0, -1.0, 2.0]), None);
+        assert_eq!(Weighted::pick_index(&mut rng(), &[-1.0]), None);
     }
 
     #[test]

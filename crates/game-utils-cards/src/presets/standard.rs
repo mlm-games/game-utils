@@ -160,7 +160,26 @@ impl FlexibleValue {
 }
 
 /// Total of fixed plus flexible values without passing `limit`.
+/// Exact (best sum ≤ `limit`, least bust when everything busts) for up
+/// to 20 flexibles via exhaustive high/low search; greedy high-first
+/// above that (exact for single-pivot values like aces either way).
 pub fn total_with_flexibles(fixed: i32, flexibles: &[FlexibleValue], limit: i32) -> i32 {
+    if flexibles.len() <= 20 {
+        let mut best_under: Option<i32> = None;
+        let mut best_over = i32::MAX;
+        for mask in 0..(1u32 << flexibles.len()) {
+            let mut total = fixed;
+            for (i, f) in flexibles.iter().enumerate() {
+                total += if mask & (1 << i) != 0 { f.high } else { f.low };
+            }
+            if total <= limit {
+                best_under = Some(best_under.map_or(total, |b: i32| b.max(total)));
+            } else {
+                best_over = best_over.min(total);
+            }
+        }
+        return best_under.unwrap_or(best_over);
+    }
     let mut total = fixed;
     let mut ordered: Vec<FlexibleValue> = flexibles.to_vec();
     ordered.sort_by_key(|f| f.high);
@@ -206,5 +225,11 @@ mod tests {
         assert_eq!(total_with_flexibles(10, &[ace], 21), 21);
         assert_eq!(total_with_flexibles(12, &[ace, ace], 21), 14);
         assert_eq!(total_with_flexibles(20, &[ace], 21), 21);
+    }
+
+    #[test]
+    fn flexible_general_case_is_optimal() {
+        let f = FlexibleValue::new(5, 6);
+        assert_eq!(total_with_flexibles(0, &[f, f], 10), 10);
     }
 }

@@ -20,6 +20,14 @@ pub enum DiagonalMode {
 }
 
 /// A* distance estimate. Zero turns A* into Dijkstra.
+///
+/// Must never overestimate the cheapest step, or A* returns suboptimal
+/// paths. Pair with the movement rule and minimum step cost:
+/// - `Never` (4-dir) + unit costs → `Manhattan` (the default pairing).
+/// - `Always`/`NoCornerCut` (8-dir) + unit costs → `Chebyshev`
+///   (`Manhattan` estimates 2 for a 1-cost diagonal, `Euclid` 1.41).
+/// - Diagonal cost ≥ √2 (corner-cut penalty) → `Euclid` is admissible.
+/// When in doubt use `Zero` (Dijkstra: always optimal, just slower).
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
 pub enum Heuristic {
     #[default]
@@ -142,20 +150,22 @@ pub fn astar_adjacent(
     if let Some(p) = astar(start, goal, passable, step_cost, cfg) {
         return Some(p);
     }
-    let mut best: Option<Vec<GridPos>> = None;
+    fn cost_of(p: &[GridPos], step_cost: &impl Fn(GridPos, GridPos) -> f32) -> f32 {
+        p.windows(2).map(|w| step_cost(w[0], w[1]).max(0.0)).sum()
+    }
+    let mut best: Option<(Vec<GridPos>, f32)> = None;
     for n in goal.neighbors8() {
         if n == start || !passable(n) {
             continue;
         }
-        if let Some(p) = astar(start, n, passable, step_cost, cfg)
-            && best
-                .as_ref()
-                .is_none_or(|b: &Vec<GridPos>| p.len() < b.len())
-        {
-            best = Some(p);
+        if let Some(p) = astar(start, n, passable, step_cost, cfg) {
+            let c = cost_of(&p, step_cost);
+            if best.as_ref().is_none_or(|(_, bc)| c < *bc) {
+                best = Some((p, c));
+            }
         }
     }
-    best
+    best.map(|(p, _)| p)
 }
 
 /// Flood fill from `start` up to `max_depth` steps. Maps cell -> depth.

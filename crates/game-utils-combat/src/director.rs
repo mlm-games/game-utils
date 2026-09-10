@@ -167,8 +167,15 @@ impl Director {
     }
 
     pub fn notify_killed(&mut self, n: u32) {
+        if n == 0 {
+            return;
+        }
         self.alive = self.alive.saturating_sub(n);
-        if self.queue.is_empty() && self.alive == 0 && self.wave > 0 {
+        let already = matches!(
+            self.events.last(),
+            Some(DirectorEvent::WaveCleared { wave }) if *wave == self.wave
+        );
+        if !already && self.queue.is_empty() && self.alive == 0 && self.wave > 0 {
             self.events
                 .push(DirectorEvent::WaveCleared { wave: self.wave });
         }
@@ -264,5 +271,29 @@ mod tests {
         assert!(should_despawn(p, c, 5.0));
         let shut = |_: Vec2| true;
         assert_eq!(pick_spawn(&mut rng(), c, 10.0, 20.0, &shut, 4), None);
+    }
+
+    #[test]
+    fn zero_kills_and_double_notify_clear_once() {
+        let mut d = Director::new(4, 1.0);
+        d.next_wave(&mut rng(), 0, 0.0, &[]);
+        d.notify_killed(0);
+        d.notify_killed(0);
+        assert!(
+            d.drain_events()
+                .iter()
+                .filter(|e| matches!(e, DirectorEvent::WaveCleared { .. }))
+                .count()
+                <= 1
+        );
+        d.notify_killed(1);
+        d.notify_killed(1);
+        assert!(
+            d.drain_events()
+                .iter()
+                .filter(|e| matches!(e, DirectorEvent::WaveCleared { .. }))
+                .count()
+                <= 1
+        );
     }
 }

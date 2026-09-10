@@ -53,7 +53,10 @@ pub fn buy(
     let price = prices
         .buy_price(id)
         .ok_or_else(|| TradeError::UnknownPrice(id.clone()))?;
-    let total = price * qty as i64;
+    if qty == 0 {
+        return Ok(());
+    }
+    let total = price.checked_mul(qty as i64).unwrap_or(i64::MAX);
     if *funds < total {
         return Err(TradeError::NoFunds {
             need: total,
@@ -69,7 +72,7 @@ pub fn buy(
             qty,
         });
     }
-    *funds -= total;
+    *funds = funds.saturating_sub(total);
     let left = inv.insert(reg, ItemStack::new(id.clone(), qty));
     debug_assert_eq!(left, 0);
     inv.record(InventoryEvent::Bought {
@@ -100,9 +103,12 @@ pub fn sell(
             have,
         });
     }
+    if qty == 0 {
+        return Ok(());
+    }
     inv.remove_all(id, qty);
-    let total = price * qty as i64;
-    *funds += total;
+    let total = price.checked_mul(qty as i64).unwrap_or(i64::MAX);
+    *funds = funds.saturating_add(total);
     inv.record(InventoryEvent::Sold {
         id: id.clone(),
         qty,
@@ -153,5 +159,16 @@ mod tests {
         assert!(buy(&r, &p, &mut inv, &mut funds, &ItemId::from("potion"), 1).is_err());
         assert_eq!(funds, 5);
         assert!(sell(&r, &p, &mut inv, &mut funds, &ItemId::from("potion"), 1).is_err());
+    }
+
+    #[test]
+    fn zero_qty_is_noop_not_free_item() {
+        let (r, p, mut inv) = setup();
+        let mut funds = 0;
+        buy(&r, &p, &mut inv, &mut funds, &ItemId::from("potion"), 0).unwrap();
+        assert_eq!(funds, 0);
+        assert_eq!(inv.count(&ItemId::from("potion")), 0);
+        sell(&r, &p, &mut inv, &mut funds, &ItemId::from("potion"), 0).unwrap();
+        assert_eq!(funds, 0);
     }
 }

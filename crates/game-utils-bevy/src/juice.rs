@@ -1,5 +1,5 @@
 use bevy_app::prelude::*;
-use bevy_color::Color;
+use bevy_color::{Alpha, Color};
 use bevy_ecs::prelude::*;
 use bevy_math::{Vec2, Vec3};
 use bevy_sprite::Sprite;
@@ -25,6 +25,13 @@ pub struct BounceScale {
     pub peak: f32,
     pub original: Option<Vec3>,
 }
+
+/// Transform scale before the first juice effect. Survives re-trigger:
+/// the helpers replace the effect component (dropping its `original`),
+/// but this stays, so machine-gun re-triggers restore to the real base
+/// instead of accumulating mid-effect scale.
+#[derive(Component, Clone, Copy)]
+struct JuiceBase(Vec3);
 
 #[derive(Component)]
 pub struct Shake {
@@ -89,8 +96,13 @@ fn animate_juice(
     mut commands: Commands,
     mut set: ParamSet<(
         Query<(Entity, &mut PopIn, &mut Transform)>,
-        Query<(Entity, &mut SquashStretch, &mut Transform)>,
-        Query<(Entity, &mut BounceScale, &mut Transform)>,
+        Query<(
+            Entity,
+            &mut SquashStretch,
+            &mut Transform,
+            Option<&JuiceBase>,
+        )>,
+        Query<(Entity, &mut BounceScale, &mut Transform, Option<&JuiceBase>)>,
         Query<(Entity, &mut Shake, &mut Transform)>,
         Query<(Entity, &mut Particle, &mut Sprite, &mut Transform)>,
     )>,
@@ -118,9 +130,15 @@ fn animate_juice(
         }
     }
 
-    for (e, mut sq, mut tf) in set.p1().iter_mut() {
+    for (e, mut sq, mut tf, base) in set.p1().iter_mut() {
         if sq.original.is_none() {
-            sq.original = Some(tf.scale);
+            match base {
+                Some(b) => sq.original = Some(b.0),
+                None => {
+                    sq.original = Some(tf.scale);
+                    commands.entity(e).insert(JuiceBase(tf.scale));
+                }
+            }
         }
         sq.timer.tick(dt);
         let t = sq.timer.fraction();
@@ -141,12 +159,19 @@ fn animate_juice(
         if sq.timer.just_finished() {
             tf.scale = orig;
             commands.entity(e).remove::<SquashStretch>();
+            commands.entity(e).remove::<JuiceBase>();
         }
     }
 
-    for (e, mut b, mut tf) in set.p2().iter_mut() {
+    for (e, mut b, mut tf, base) in set.p2().iter_mut() {
         if b.original.is_none() {
-            b.original = Some(tf.scale);
+            match base {
+                Some(x) => b.original = Some(x.0),
+                None => {
+                    b.original = Some(tf.scale);
+                    commands.entity(e).insert(JuiceBase(tf.scale));
+                }
+            }
         }
         b.timer.tick(dt);
         let t = b.timer.fraction();
@@ -162,6 +187,7 @@ fn animate_juice(
         if b.timer.just_finished() {
             tf.scale = orig;
             commands.entity(e).remove::<BounceScale>();
+            commands.entity(e).remove::<JuiceBase>();
         }
     }
 
@@ -193,11 +219,8 @@ fn animate_juice(
         tf.translation += (p.velocity * dt.as_secs_f32()).extend(0.0);
         p.velocity.y -= 60.0 * dt.as_secs_f32();
         let t = p.lifetime.fraction();
-        sprite.color = Color::srgba(
-            p.start_color.to_linear().red,
-            p.start_color.to_linear().green,
-            p.start_color.to_linear().blue,
-            (1.0 - t).clamp(0.0, 1.0),
-        );
+        let mut faded = p.start_color;
+        faded.set_alpha((1.0 - t).clamp(0.0, 1.0));
+        sprite.color = faded;
     }
 }

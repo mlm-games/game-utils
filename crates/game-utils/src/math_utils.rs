@@ -63,6 +63,9 @@ impl MathUtils {
         Vec2::new(x, y)
     }
 
+    /// Per-axis approach: each axis moves up to `rate` toward the target,
+    /// so diagonal travel covers up to √2 × `rate` per call. When `rate`
+    /// is a speed, use Euclidean `move_towards`-style math instead.
     pub fn approach_vec2(current: Vec2, target: Vec2, rate: f32) -> Vec2 {
         Vec2::new(
             Self::approach(current.x, target.x, rate),

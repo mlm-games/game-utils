@@ -3,8 +3,8 @@
 //! Register embedded FTL at boot, switch locales from settings/UI code,
 //! read strings via [`I18nStrings::get`]. Rendering stays in Repose views.
 
-use game_utils::i18n::LocaleResources;
 use bevy_ecs::prelude::*;
+use game_utils::i18n::LocaleResources;
 
 /// Current translations as a sim resource.
 #[derive(Resource, Clone, Default)]
@@ -26,6 +26,17 @@ impl I18nStrings {
         let mut res = LocaleResources::default();
         for (locale, ftl) in locales {
             res.register(locale, ftl, keys);
+        }
+        if !res.available.contains(&res.current) {
+            let default_locale = if res.available.contains(&"en".to_string()) {
+                "en".to_string()
+            } else {
+                res.available
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| "en".to_string())
+            };
+            res.set_locale(&default_locale);
         }
         Self(res)
     }

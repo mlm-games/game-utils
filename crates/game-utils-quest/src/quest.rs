@@ -137,10 +137,14 @@ impl QuestLog {
             .collect()
     }
 
-    /// Begin a quest. Refuses duplicates and unmet prerequisites.
+    /// Begin a quest. Refuses duplicates and unmet prerequisites. A
+    /// `Failed` quest may be restarted (it resets to `Active`); anything
+    /// else present is still `AlreadyPresent`.
     pub fn start(&mut self, def: &QuestDef) -> Result<(), StartError> {
-        if self.quests.contains_key(&def.id) {
-            return Err(StartError::AlreadyPresent);
+        if let Some(q) = self.quests.get(&def.id) {
+            if q.stage != Stage::Failed {
+                return Err(StartError::AlreadyPresent);
+            }
         }
         let unmet = self.unmet(def);
         if !unmet.is_empty() {
@@ -225,6 +229,7 @@ impl QuestLog {
         if def.repeatable {
             q.stage = Stage::Active;
             q.progress.fill(0);
+            q.outcome = None;
             q.time_left = def.time_limit;
             self.events.push(QuestEvent::Started { id: def.id.clone() });
         } else {
@@ -373,6 +378,20 @@ mod tests {
         log.advance(&d, "kill_rat", 3);
         log.advance(&d, "report", 1);
         assert!(log.complete(&d, "again").is_some());
+        assert_eq!(log.stage("rats"), Stage::Active);
+        assert_eq!(log.get("rats").unwrap().progress, vec![0, 0]);
+        assert_eq!(log.get("rats").unwrap().outcome, None);
+    }
+
+    #[test]
+    fn failed_quest_restarts() {
+        let mut d = def();
+        d.time_limit = Some(10.0);
+        let mut log = QuestLog::new();
+        log.start(&d).unwrap();
+        log.tick(11.0);
+        assert_eq!(log.stage("rats"), Stage::Failed);
+        assert!(log.start(&d).is_ok());
         assert_eq!(log.stage("rats"), Stage::Active);
         assert_eq!(log.get("rats").unwrap().progress, vec![0, 0]);
     }

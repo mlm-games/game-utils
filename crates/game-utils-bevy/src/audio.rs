@@ -133,9 +133,13 @@ impl SfxPool {
 
     /// Play a one-shot on a pooled voice. If the same stream was already requested this
     /// frame, collapse to the existing voice (moving it closer to a nearer request).
+    /// `channels` stamps the bus gain at spawn: without it the sink plays at
+    /// raw `volume` until `sync_channel_volumes` corrects it a frame later
+    /// (one loud burst per one-shot at low master).
     pub fn play_sfx(
         &mut self,
         commands: &mut Commands,
+        channels: &AudioChannels,
         handle: Handle<AudioSource>,
         pos: Vec3,
         listener: Vec3,
@@ -186,7 +190,7 @@ impl SfxPool {
             BaseVolume(volume),
             AudioPlayer::new(handle.clone()),
             PlaybackSettings::REMOVE
-                .with_volume(bevy_audio::Volume::Linear(volume))
+                .with_volume(bevy_audio::Volume::Linear(volume * channels.sfx_volume()))
                 .with_speed(pitch)
                 .with_spatial(true),
             Transform::from_translation(pos),
@@ -197,14 +201,20 @@ impl SfxPool {
     }
 
     /// Play without positional/directional logic (UI, non-spatial). Varies pitch slightly.
-    pub fn play_ui(&self, commands: &mut Commands, handle: Handle<AudioSource>, volume: f32) {
+    pub fn play_ui(
+        &self,
+        commands: &mut Commands,
+        channels: &AudioChannels,
+        handle: Handle<AudioSource>,
+        volume: f32,
+    ) {
         let mut rng = rand::rng();
         let pitch = 1.0 + rng.random_range(-0.05..0.05);
         commands.spawn((
             BaseVolume(volume),
             AudioPlayer::new(handle),
             PlaybackSettings::DESPAWN
-                .with_volume(bevy_audio::Volume::Linear(volume))
+                .with_volume(bevy_audio::Volume::Linear(volume * channels.ui_volume()))
                 .with_speed(pitch),
             UiChannel,
         ));
@@ -269,17 +279,26 @@ fn tick_music_fades(
 pub struct AudioM;
 
 impl AudioM {
-    pub fn play_sfx(commands: &mut Commands, handle: Handle<AudioSource>, volume: f32) {
+    /// Spawn volumes are bus-stamped at spawn (`sync_channel_volumes` only
+    /// corrects them on a later frame, which bursts loud at low master).
+    pub fn play_sfx(
+        commands: &mut Commands,
+        channels: &AudioChannels,
+        handle: Handle<AudioSource>,
+        volume: f32,
+    ) {
         commands.spawn((
             BaseVolume(volume),
             AudioPlayer::new(handle),
-            PlaybackSettings::DESPAWN.with_volume(bevy_audio::Volume::Linear(volume)),
+            PlaybackSettings::DESPAWN
+                .with_volume(bevy_audio::Volume::Linear(volume * channels.sfx_volume())),
             SfxChannel,
         ));
     }
 
     pub fn play_sfx_varied(
         commands: &mut Commands,
+        channels: &AudioChannels,
         handle: Handle<AudioSource>,
         volume: f32,
         pitch_var: f32,
@@ -290,7 +309,7 @@ impl AudioM {
             BaseVolume(volume),
             AudioPlayer::new(handle),
             PlaybackSettings::DESPAWN
-                .with_volume(bevy_audio::Volume::Linear(volume))
+                .with_volume(bevy_audio::Volume::Linear(volume * channels.sfx_volume()))
                 .with_speed(pitch),
             SfxChannel,
         ));
@@ -298,6 +317,7 @@ impl AudioM {
 
     pub fn play_music(
         commands: &mut Commands,
+        channels: &AudioChannels,
         handle: Handle<AudioSource>,
         volume: f32,
         music_q: &Query<Entity, With<MusicChannel>>,
@@ -308,7 +328,8 @@ impl AudioM {
         commands.spawn((
             BaseVolume(volume),
             AudioPlayer::new(handle),
-            PlaybackSettings::LOOP.with_volume(bevy_audio::Volume::Linear(volume)),
+            PlaybackSettings::LOOP
+                .with_volume(bevy_audio::Volume::Linear(volume * channels.music_volume())),
             MusicChannel,
         ));
     }
@@ -319,11 +340,17 @@ impl AudioM {
         }
     }
 
-    pub fn play_ui(commands: &mut Commands, handle: Handle<AudioSource>, volume: f32) {
+    pub fn play_ui(
+        commands: &mut Commands,
+        channels: &AudioChannels,
+        handle: Handle<AudioSource>,
+        volume: f32,
+    ) {
         commands.spawn((
             BaseVolume(volume),
             AudioPlayer::new(handle),
-            PlaybackSettings::DESPAWN.with_volume(bevy_audio::Volume::Linear(volume)),
+            PlaybackSettings::DESPAWN
+                .with_volume(bevy_audio::Volume::Linear(volume * channels.ui_volume())),
             UiChannel,
         ));
     }

@@ -11,3 +11,6 @@ categories = ["game-development"]
 [dependencies]
 serde.workspace = true
 game-utils-grid.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

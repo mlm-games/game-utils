@@ -43,10 +43,8 @@ pub fn pick(
             None => true,
             Some((id, bs)) => {
                 if Some(c.id) == incumbent {
-                    // Incumbent retakes with slack.
-                    s < bs + m
+                    s <= bs + m
                 } else if Some(id) == incumbent {
-                    // Challenger must clear the margin.
                     s + m < bs
                 } else {
                     s < bs
@@ -93,5 +91,16 @@ mod tests {
     #[test]
     fn empty_none() {
         assert_eq!(pick(Vec2::ZERO, &[], 1.0, None, 0.0), None);
+    }
+
+    #[test]
+    fn incumbent_wins_ties_regardless_of_order() {
+        let a = Candidate::new(1, Vec2::X * 10.0, 0.0);
+        let b = Candidate::new(2, Vec2::X * -10.0, 0.0);
+        assert_eq!(
+            pick(Vec2::ZERO, &[a.clone(), b.clone()], 1.0, Some(2), 0.0),
+            Some(2)
+        );
+        assert_eq!(pick(Vec2::ZERO, &[b, a], 1.0, Some(2), 0.0), Some(2));
     }
 }

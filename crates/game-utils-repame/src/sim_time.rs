@@ -154,9 +154,14 @@ impl Default for HitStop {
 impl HitStop {
     /// Dip virtual time to `scale` immediately, then recover to normal
     /// speed over `recover_secs` sim seconds (scaled by
-    /// [`FeelIntensity::freezeframes`] at tick time).
+    /// [`FeelIntensity::freezeframes`] at tick time). Strongest wins:
+    /// a weaker-or-equal call mid-freeze is ignored, like the Bevy twin.
     pub fn trigger(&mut self, scale: f32, recover_secs: f32) {
-        self.start_scale = scale.clamp(0.01, 1.0);
+        let scale = scale.clamp(0.01, 1.0);
+        if self.active && scale >= self.scale {
+            return;
+        }
+        self.start_scale = scale;
         self.scale = self.start_scale;
         self.elapsed = 0.0;
         self.duration = recover_secs.max(0.0);
@@ -214,8 +219,13 @@ impl Default for SlowMotion {
 }
 
 impl SlowMotion {
+    /// Strongest wins, like [`HitStop::trigger`].
     pub fn start(&mut self, scale: f32, duration: f32) {
-        self.scale = scale.clamp(0.01, 1.0);
+        let scale = scale.clamp(0.01, 1.0);
+        if self.active && scale >= self.scale {
+            return;
+        }
+        self.scale = scale;
         self.elapsed = 0.0;
         self.duration = duration.max(0.0);
         self.active = true;

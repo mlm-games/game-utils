@@ -100,6 +100,11 @@ impl NavGraph {
     }
 
     /// Node-id path plus true (unquantized) cost, via external A*.
+    /// The Euclidean-distance heuristic assumes every edge costs at least
+    /// its endpoint distance: with cheaper edges (teleports, cost < dist)
+    /// it overestimates and A* can return a suboptimal path. Keep
+    /// `connect` costs >= distance, or the direct edge loses to a cheap
+    /// multi-hop route only by luck.
     pub fn find_path(&self, start: u32, goal: u32) -> Option<(Vec<u32>, f32)> {
         if !self.pos.contains_key(&start) || !self.pos.contains_key(&goal) {
             return None;

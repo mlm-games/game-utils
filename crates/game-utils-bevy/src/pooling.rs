@@ -65,7 +65,8 @@ impl ObjectPool {
                 continue;
             };
             pool.active.push(e);
-            ec.insert(Visibility::Visible);
+            ec.insert((Visibility::Visible, M::default()));
+            spawn(&mut ec);
             return Some(e);
         }
         if pool.total_count() >= pool.max_size {

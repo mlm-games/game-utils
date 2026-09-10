@@ -109,7 +109,8 @@ impl ImpactShake {
             self.offset = self.offset.normalize() * cfg.max_offset;
             self.velocity *= 0.5;
         }
-        self.velocity = -self.offset * cfg.stiffness + self.velocity * cfg.damping;
+        let h = delta * 60.0;
+        self.velocity = (self.velocity - self.offset * cfg.stiffness * h) * cfg.damping.powf(h);
         self.offset
     }
 }
@@ -229,6 +230,7 @@ impl Plugin for ScreenEffectsPlugin {
             .init_resource::<FreezeFrame>()
             .init_resource::<ChromaticAberration>()
             .init_resource::<ScreenEffectsConfig>()
+            .init_resource::<crate::time_scale::TimeScaleControl>()
             .add_systems(
                 Update,
                 (

@@ -19,6 +19,13 @@ pub struct HitFlash {
     pub original: Option<Color>,
 }
 
+/// True base color stashed on the first flash. Survives re-flash:
+/// [`HitFlash::apply`] replaces `HitFlash` (dropping its `original`), but
+/// this stays, so a second hit mid-flash restores to the real base instead
+/// of baking the mid-flash mix in permanently.
+#[derive(Component, Clone, Copy)]
+struct FlashBase(Color);
+
 impl HitFlash {
     pub fn new(color: Color, duration_secs: f32) -> Self {
         Self::with_value(color, duration_secs, 0.85)
@@ -56,54 +63,82 @@ impl Plugin for HitFlashPlugin {
 fn tick_hit_flash(
     time: Res<Time>,
     mut commands: Commands,
-    mut sprites: Query<(Entity, &mut Sprite, &mut HitFlash)>,
-    mut bgs: Query<(Entity, &mut BackgroundColor, &mut HitFlash), Without<Sprite>>,
+    mut sprites: Query<(Entity, &mut Sprite, &mut HitFlash, Option<&FlashBase>)>,
+    mut bgs: Query<
+        (
+            Entity,
+            &mut BackgroundColor,
+            &mut HitFlash,
+            Option<&FlashBase>,
+        ),
+        Without<Sprite>,
+    >,
     mut texts: Query<
-        (Entity, &mut TextColor, &mut HitFlash),
+        (Entity, &mut TextColor, &mut HitFlash, Option<&FlashBase>),
         (Without<Sprite>, Without<BackgroundColor>),
     >,
 ) {
-    for (e, mut sprite, mut hf) in &mut sprites {
+    for (e, mut sprite, mut hf, base) in &mut sprites {
         if hf.original.is_none() {
-            hf.original = Some(sprite.color);
+            match base {
+                Some(b) => hf.original = Some(b.0),
+                None => {
+                    hf.original = Some(sprite.color);
+                    commands.entity(e).insert(FlashBase(sprite.color));
+                }
+            }
         }
         hf.timer.tick(time.delta());
         let t = hf.timer.fraction().clamp(0.0, 1.0);
-        // Cubic ease-out decay: full strength at t=0, falling to 0 at t=1.
-        let strength = hf.value * (1.0 - t).powi(3);
+        let strength = (hf.value * (1.0 - t).powi(3)).clamp(0.0, 1.0);
         let base = hf.original.unwrap_or(Color::WHITE);
         sprite.color = base.mix(&hf.color, strength);
         if hf.timer.just_finished() {
             sprite.color = hf.original.unwrap_or(Color::WHITE);
             commands.entity(e).remove::<HitFlash>();
+            commands.entity(e).remove::<FlashBase>();
         }
     }
-    for (e, mut bg, mut hf) in &mut bgs {
+    for (e, mut bg, mut hf, base) in &mut bgs {
         if hf.original.is_none() {
-            hf.original = Some(bg.0);
+            match base {
+                Some(b) => hf.original = Some(b.0),
+                None => {
+                    hf.original = Some(bg.0);
+                    commands.entity(e).insert(FlashBase(bg.0));
+                }
+            }
         }
         hf.timer.tick(time.delta());
         let t = hf.timer.fraction().clamp(0.0, 1.0);
-        let strength = hf.value * (1.0 - t).powi(3);
+        let strength = (hf.value * (1.0 - t).powi(3)).clamp(0.0, 1.0);
         let base = hf.original.unwrap_or(Color::WHITE);
         bg.0 = base.mix(&hf.color, strength);
         if hf.timer.just_finished() {
             bg.0 = hf.original.unwrap_or(Color::WHITE);
             commands.entity(e).remove::<HitFlash>();
+            commands.entity(e).remove::<FlashBase>();
         }
     }
-    for (e, mut text_color, mut hf) in &mut texts {
+    for (e, mut text_color, mut hf, base) in &mut texts {
         if hf.original.is_none() {
-            hf.original = Some(text_color.0);
+            match base {
+                Some(b) => hf.original = Some(b.0),
+                None => {
+                    hf.original = Some(text_color.0);
+                    commands.entity(e).insert(FlashBase(text_color.0));
+                }
+            }
         }
         hf.timer.tick(time.delta());
         let t = hf.timer.fraction().clamp(0.0, 1.0);
-        let strength = hf.value * (1.0 - t).powi(3);
+        let strength = (hf.value * (1.0 - t).powi(3)).clamp(0.0, 1.0);
         let base = hf.original.unwrap_or(Color::WHITE);
         text_color.0 = base.mix(&hf.color, strength);
         if hf.timer.just_finished() {
             text_color.0 = hf.original.unwrap_or(Color::WHITE);
             commands.entity(e).remove::<HitFlash>();
+            commands.entity(e).remove::<FlashBase>();
         }
     }
 }

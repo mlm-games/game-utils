@@ -793,9 +793,8 @@ fn wheel_step(
     spin_inertia: f32,
     dt: f32,
 ) -> Option<crate::wheel::WheelForce> {
-    // Steered frame first, then the mass-explicit wheel update.
     let target = if wcfg.steered {
-        let base = steering.target_angle(shaped) * wcfg.steer_ratio;
+        let base = steering.target_angle_at(shaped, body.forward_speed().abs()) * wcfg.steer_ratio;
         base * (1.0 + wcfg.ackermann * shaped.signum() * shaped.abs())
     } else {
         0.0

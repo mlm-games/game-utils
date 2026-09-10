@@ -480,7 +480,7 @@ impl<S: Storage> ProfileManager<S> {
     fn verify_copy(&self, src: &Path, dst: &Path) -> bool {
         let ok_src = self.storage.metadata_len(src).unwrap_or(0);
         let ok_dst = self.storage.metadata_len(dst).unwrap_or(0);
-        if ok_src == 0 || ok_src != ok_dst {
+        if ok_src != ok_dst {
             return false;
         }
         if let (Ok(Some(a)), Ok(Some(b))) = (self.storage.read(src), self.storage.read(dst)) {

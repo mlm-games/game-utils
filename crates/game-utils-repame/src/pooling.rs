@@ -108,8 +108,9 @@ impl ObjectPool {
     }
 
     /// Release back to the pool. Returns `false` (and does nothing) when
-    /// `entity` is not an active pooled entity — e.g. never acquired,
-    /// already released, or despawned without a [`Self::scrub`].
+    /// `entity` is not an active pooled entity — e.g. never acquired or
+    /// already released. A despawned-but-still-listed entity is scrubbed
+    /// from `active` and reports `true`: the dead entry was cleaned.
     pub fn try_release<M: Component + Default>(
         pool: &mut EntityPool<M>,
         entity: Entity,
@@ -120,9 +121,8 @@ impl ObjectPool {
             if let Ok(mut ec) = commands.get_entity(entity) {
                 ec.insert(PoolHidden);
                 pool.available.push_back(entity);
-                return true;
             }
-            return false;
+            return true;
         }
         false
     }

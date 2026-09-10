@@ -63,7 +63,9 @@ impl Stat {
     }
 
     /// Reset the current value. SUM stats restart from their best so cumulative stats
-    /// never regress across a run boundary.
+    /// never regress across a run boundary. Pair with [`StatsStore::record`]:
+    /// the seeded current already carries history, so recording takes the
+    /// max instead of re-summing (which would double-count).
     pub fn reset(&mut self, best: Option<f32>) {
         self.current = if self.aggregation == Aggregation::Sum {
             best
@@ -98,8 +100,17 @@ impl StatsStore {
 
     /// Record the stat's current value into `category`, merging with the previous best
     /// under the stat's aggregation. Returns the new best.
+    ///
+    /// SUM stats merge with `max`, not `sum`: [`Stat::reset`] seeds the
+    /// current with the persisted best, so it already carries history and
+    /// re-summing would double-count across every run boundary.
     pub fn record(&mut self, category: &str, stat: &Stat) -> Option<f32> {
-        let best = stat.best_with(self.best(category, &stat.id));
+        let persisted = self.best(category, &stat.id);
+        let best = if stat.aggregation == Aggregation::Sum {
+            aggregate(Aggregation::Max, &[stat.current, persisted])
+        } else {
+            stat.best_with(persisted)
+        };
         if let Some(b) = best {
             self.by_category
                 .entry(CategoryId::new(category))
@@ -175,6 +186,18 @@ mod tests {
         assert_eq!(s.current, Some(5.0));
         s.reset(Some(12.0));
         assert_eq!(s.current, Some(12.0));
+    }
+
+    #[test]
+    fn sum_record_does_not_double_count() {
+        let mut store = StatsStore::default();
+        let mut s = Stat::new("kills", Aggregation::Sum);
+        s.update(5.0);
+        assert_eq!(store.record("run", &s), Some(5.0));
+        s.reset(store.best("run", "kills"));
+        s.update(5.0);
+        assert_eq!(s.current, Some(10.0));
+        assert_eq!(store.record("run", &s), Some(10.0));
     }
 
     #[test]

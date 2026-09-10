@@ -120,17 +120,18 @@ impl<S: FreelyMutableState> Transition<S> {
     }
 
     pub fn circle_wipe_progress(&self) -> f32 {
-        if matches!(
-            self.kind,
-            TransitionKind::CircleWipe(_) | TransitionKind::Custom(_)
-        ) {
-            match self.phase {
+        match self.kind {
+            TransitionKind::CircleWipe(CircleWipeDirection::Contract) => match self.phase {
+                TransitionPhase::Covering => 1.0 - self.progress,
+                TransitionPhase::Uncovering => self.progress,
+                TransitionPhase::Idle => 0.0,
+            },
+            TransitionKind::CircleWipe(_) => match self.phase {
                 TransitionPhase::Covering => self.progress,
                 TransitionPhase::Uncovering => 1.0 - self.progress,
                 TransitionPhase::Idle => 0.0,
-            }
-        } else {
-            0.0
+            },
+            _ => 0.0,
         }
     }
 
@@ -244,7 +245,7 @@ fn update_visuals<S: FreelyMutableState>(tr: &mut Transition<S>, t: f32, coverin
         TransitionKind::Custom(_) => {
             let fade = if covering { t } else { 1.0 - t };
             tr.overlay_alpha = fade;
-            tr.circle_progress = if covering { t } else { 1.0 - t };
+            tr.circle_progress = 0.0;
         }
     }
 }

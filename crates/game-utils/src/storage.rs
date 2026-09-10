@@ -302,7 +302,7 @@ impl Storage for MemoryStorage {
             g.dirs.remove(&from_n);
             g.files.insert(to_n.clone(), data);
             g.mtimes.insert(to_n.clone(), mtime);
-            g.dirs.insert(to_n.clone());
+            g.dirs.remove(&to_n);
             if let Some(parent) = to_n.parent() {
                 g.dirs.insert(parent.to_path_buf());
             }

@@ -42,17 +42,17 @@ pub fn can_craft(reg: &ItemRegistry, inv: &SlotInventory, recipe: &Recipe, times
         return true;
     }
     for (id, qty) in &recipe.inputs {
-        if reg.def(id).is_none() || inv.count(id) < qty * times {
+        if reg.def(id).is_none() || inv.count(id) < qty.saturating_mul(times) {
             return false;
         }
     }
     // Simulate consumption, then check output room.
     let mut sim = inv.clone();
     for (id, qty) in &recipe.inputs {
-        sim.remove_all(id, qty * times);
+        sim.remove_all(id, qty.saturating_mul(times));
     }
     for (id, qty) in &recipe.outputs {
-        if reg.def(id).is_none() || sim.count_free(reg, id) < qty * times {
+        if reg.def(id).is_none() || sim.count_free(reg, id) < qty.saturating_mul(times) {
             return false;
         }
     }
@@ -74,10 +74,10 @@ pub fn craft(
             return Err(CraftError::UnknownItem(id.clone()));
         }
         let have = inv.count(id);
-        if have < qty * times {
+        if have < qty.saturating_mul(times) {
             return Err(CraftError::Missing {
                 id: id.clone(),
-                need: qty * times,
+                need: qty.saturating_mul(times),
                 have,
             });
         }
@@ -85,28 +85,28 @@ pub fn craft(
     // Output room after simulated consumption.
     let mut sim = inv.clone();
     for (id, qty) in &recipe.inputs {
-        sim.remove_all(id, qty * times);
+        sim.remove_all(id, qty.saturating_mul(times));
     }
     for (id, qty) in &recipe.outputs {
         let Some(_) = reg.def(id) else {
             return Err(CraftError::UnknownItem(id.clone()));
         };
-        if sim.count_free(reg, id) < qty * times {
+        if sim.count_free(reg, id) < qty.saturating_mul(times) {
             return Err(CraftError::NoOutputRoom {
                 id: id.clone(),
-                qty: qty * times,
+                qty: qty.saturating_mul(times),
             });
         }
     }
     for (id, qty) in &recipe.inputs {
-        inv.remove_all(id, qty * times);
+        inv.remove_all(id, qty.saturating_mul(times));
     }
     for (id, qty) in &recipe.outputs {
-        let left = inv.insert(reg, ItemStack::new(id.clone(), qty * times));
+        let left = inv.insert(reg, ItemStack::new(id.clone(), qty.saturating_mul(times)));
         debug_assert_eq!(left, 0);
         inv.record(InventoryEvent::Crafted {
             id: id.clone(),
-            qty: qty * times,
+            qty: qty.saturating_mul(times),
         });
     }
     Ok(())

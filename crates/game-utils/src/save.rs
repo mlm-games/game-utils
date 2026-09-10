@@ -141,13 +141,15 @@ impl<S: Storage> SaveManager<S> {
         let Ok(s) = std::str::from_utf8(bytes) else {
             return (T::default(), LoadStatus::Corrupt);
         };
-        let mut data: T = ron::from_str(s).unwrap_or_default();
+        let Ok(mut data) = ron::from_str::<T>(s) else {
+            return (T::default(), LoadStatus::Corrupt);
+        };
         let from = data.version();
         if from < self.current_version {
             data.migrate(from, self.current_version);
             data.set_version(self.current_version);
         } else if from != self.current_version {
-            data.set_version(self.current_version);
+            return (data, LoadStatus::Corrupt);
         }
         (data, status)
     }

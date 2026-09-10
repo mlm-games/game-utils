@@ -57,7 +57,11 @@ impl GameFeel {
     }
 
     pub fn slow_motion(slow_mo: &mut SlowMotion, scale: f32, duration_real: f32) {
-        slow_mo.scale = scale.clamp(0.01, 1.0);
+        let scale = scale.clamp(0.01, 1.0);
+        if slow_mo.active && scale >= slow_mo.scale {
+            return;
+        }
+        slow_mo.scale = scale;
         slow_mo.timer = Timer::from_seconds(duration_real, TimerMode::Once);
         slow_mo.active = true;
     }
@@ -88,6 +92,7 @@ pub struct GameFeelPlugin;
 impl Plugin for GameFeelPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<SlowMotion>()
+            .init_resource::<crate::time_scale::TimeScaleControl>()
             .add_systems(Update, (apply_recoil, tick_slow_motion));
     }
 }

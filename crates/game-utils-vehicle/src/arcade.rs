@@ -115,13 +115,11 @@ impl ArcadeState {
                 (inp.throttle * cfg.acceleration * surface.accel_scale + boost_accel) * dt;
         } else if inp.throttle < 0.0 {
             if self.speed > 0.5 {
-                // Reverse demand while moving forward = brake.
-                self.speed -= -inp.throttle * cfg.braking * dt;
+                self.speed -= -inp.throttle * cfg.braking * surface.accel_scale * dt;
             } else {
-                self.speed += inp.throttle * cfg.reverse_acceleration * dt;
+                self.speed += inp.throttle * cfg.reverse_acceleration * surface.accel_scale * dt;
             }
         } else {
-            // Exponential coast decay.
             self.speed -= self.speed * cfg.coast_drag.min(10.0) * dt;
             if self.speed.abs() < 0.01 {
                 self.speed = 0.0;

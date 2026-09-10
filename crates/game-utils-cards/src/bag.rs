@@ -82,18 +82,25 @@ impl<T> Bag<T> {
         (0..n).filter_map(|_| self.draw_random(rng)).collect()
     }
 
-    /// Remove the first item matching `pred`.
+    /// Remove the first item matching `pred`. Searches staged cards first
+    /// (they are what `draw_random` serves first), then the main items.
     pub fn draw_where(&mut self, mut pred: impl FnMut(&T) -> bool) -> Option<T> {
-        let pos = self.items.iter().position(&mut pred)?;
+        if let Some(pos) = self.staged.iter().position(&mut pred) {
+            return self.staged.remove(pos);
+        }
+        let pos = self.items.iter().position(pred)?;
         Some(self.items.remove(pos))
     }
 
+    /// True when any card (staged or main) matches `pred`.
     pub fn contains(&self, mut pred: impl FnMut(&T) -> bool) -> bool {
-        self.items.iter().any(&mut pred)
+        self.staged.iter().any(&mut pred) || self.items.iter().any(pred)
     }
 
-    pub fn retain(&mut self, pred: impl FnMut(&T) -> bool) {
-        self.items.retain(pred);
+    /// Keep only matching cards, in both staged and main items.
+    pub fn retain(&mut self, mut pred: impl FnMut(&T) -> bool) {
+        self.items.retain(&mut pred);
+        self.staged.retain(&mut pred);
     }
 
     pub fn clear(&mut self) -> Vec<T> {
@@ -253,6 +260,18 @@ mod tests {
         let rest = bag.draw_many(&mut rng, 5);
         assert_eq!(rest.len(), 2);
         assert!(bag.is_empty());
+    }
+
+    #[test]
+    fn bag_staged_visible_to_search() {
+        let mut bag = Bag::with_items(vec![1, 2, 3]);
+        bag.stage_next(99);
+        assert!(bag.contains(|&x| x == 99));
+        assert_eq!(bag.draw_where(|&x| x == 99), Some(99));
+        bag.stage_next(100);
+        bag.retain(|&x| x != 100);
+        assert!(!bag.contains(|&x| x == 100));
+        assert_eq!(bag.staged_len(), 0);
     }
 
     #[test]

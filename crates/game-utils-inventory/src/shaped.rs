@@ -89,6 +89,38 @@ impl ShapedInventory {
         }
     }
 
+    /// Repair a stale occupancy grid. `occ` is `#[serde(skip)]` (footprints
+    /// need the registry to rebuild), so a deserialized bag starts with an
+    /// empty grid that would let `place` overlap everything. Any writer
+    /// path calls this first.
+    fn ensure_occ(&mut self, reg: &ItemRegistry) {
+        if self.occ.w != self.w as u32 || self.occ.h != self.h as u32 {
+            self.rebuild(reg);
+            return;
+        }
+        let stale = if self.items.is_empty() {
+            self.occ.count() != 0
+        } else if self.occ.count() == 0 {
+            true
+        } else {
+            self.items.iter().any(|it| {
+                reg.def(&it.stack.def).is_some_and(|def| {
+                    let (fw, fh) = footprint(def.cells_w, def.cells_h, it.rot);
+                    (0..fh).any(|dy| {
+                        (0..fw).any(|dx| {
+                            !self
+                                .occ
+                                .get(it.x as i32 + dx as i32, it.y as i32 + dy as i32)
+                        })
+                    })
+                })
+            })
+        };
+        if stale {
+            self.rebuild(reg);
+        }
+    }
+
     /// Place at an explicit cell + rotation.
     pub fn place(
         &mut self,
@@ -98,6 +130,7 @@ impl ShapedInventory {
         y: u8,
         rot: u8,
     ) -> Result<usize, PlaceError> {
+        self.ensure_occ(reg);
         let def = reg.def(&stack.def).ok_or(PlaceError::UnknownItem)?;
         let (fw, fh) = footprint(def.cells_w, def.cells_h, rot % 4);
         if x as u32 + fw > self.w as u32 || y as u32 + fh > self.h as u32 {
@@ -125,6 +158,7 @@ impl ShapedInventory {
         reg: &ItemRegistry,
         stack: ItemStack,
     ) -> Result<(usize, u8, u8, u8), PlaceError> {
+        self.ensure_occ(reg);
         let spot = self.find_space(reg, &stack.def).ok_or_else(|| {
             if reg.def(&stack.def).is_none() {
                 PlaceError::UnknownItem
@@ -176,6 +210,7 @@ impl ShapedInventory {
         let Some(it) = self.items.get(idx).cloned() else {
             return Err(PlaceError::Blocked);
         };
+        self.ensure_occ(reg);
         self.items.remove(idx);
         self.rebuild(reg);
         match self.place(reg, it.stack.clone(), x, y, rot) {
@@ -267,5 +302,23 @@ mod tests {
         assert!(inv.move_item(&r, 1, 0, 0, 0).is_err());
         assert_eq!(inv.len(), 2);
         assert!(inv.move_item(&r, 1, 2, 0, 0).is_ok());
+    }
+
+    #[test]
+    fn occupancy_survives_serde_round_trip() {
+        let r = reg();
+        let mut inv = ShapedInventory::new(4, 4);
+        inv.place(&r, ItemStack::new("sword", 1), 0, 0, 0).unwrap();
+        let json = serde_json::to_string(&inv).unwrap();
+        let mut loaded: ShapedInventory = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            loaded.place(&r, ItemStack::new("potion", 1), 0, 0, 0),
+            Err(PlaceError::Blocked)
+        );
+        assert!(
+            loaded
+                .place(&r, ItemStack::new("potion", 1), 1, 0, 0)
+                .is_ok()
+        );
     }
 }

@@ -79,6 +79,17 @@ impl<S: Storage> SaveResource<S> {
     {
         self.0.save(data)
     }
+
+    /// Version-stamped save: sets `data.version = current_version` before
+    /// serializing. Prefer this for `Versioned` types: raw `save_now`
+    /// writes whatever stamp `data` carries, so the next load migrates
+    /// from the wrong base.
+    pub fn save_now_versioned<T>(&self, data: &mut T) -> SaveResult
+    where
+        T: Serialize + Versioned,
+    {
+        self.0.save_versioned(data)
+    }
 }
 
 impl<S: Storage> Deref for SaveResource<S> {

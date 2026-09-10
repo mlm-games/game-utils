@@ -56,6 +56,9 @@ pub fn wander(rng: &mut impl Rng, dir: Vec2, jitter: f32) -> Vec2 {
 }
 
 /// Push from crowded neighbors: sum of (away / dist) inside `radius`.
+/// `others` must exclude `pos` itself. Coincident points contribute
+/// nothing (zero distance has no direction): perfectly stacked agents
+/// never separate, so jitter spawns or snap-movement callers.
 pub fn separation(pos: Vec2, others: &[Vec2], radius: f32, max: f32) -> Vec2 {
     let mut out = Vec2::ZERO;
     if radius <= 0.0 {

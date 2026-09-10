@@ -64,12 +64,15 @@ impl<T: Clone> DenseGrid<T> {
     }
 
     pub fn pos_of(&self, i: usize) -> Option<GridPos> {
+        if self.w == 0 {
+            return None;
+        }
         (i < self.cells.len())
             .then(|| GridPos::new(i as i32 % self.w as i32, i as i32 / self.w as i32))
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (GridPos, &T)> {
-        let w = self.w as i32;
+        let w = self.w.max(1) as i32;
         self.cells
             .iter()
             .enumerate()
@@ -77,7 +80,7 @@ impl<T: Clone> DenseGrid<T> {
     }
 
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (GridPos, &mut T)> {
-        let w = self.w as i32;
+        let w = self.w.max(1) as i32;
         self.cells
             .iter_mut()
             .enumerate()

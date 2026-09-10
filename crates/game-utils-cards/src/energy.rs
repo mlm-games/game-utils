@@ -66,11 +66,13 @@ impl Cost {
     }
 
     /// Value after flat adjustments and a multiplier, clamped at 0.
+    /// A negative multiplier can't drive the result below 0 (paying a
+    /// negative cost would credit resources downstream).
     pub fn effective_scaled(&self, adjustments: &[i32], multiplier: f32) -> i32 {
         if self.is_x() {
             return 0;
         }
-        ((self.effective(adjustments) as f32) * multiplier).round() as i32
+        (((self.effective(adjustments) as f32) * multiplier).round() as i32).max(0)
     }
 }
 
@@ -223,6 +225,7 @@ mod tests {
         assert_eq!(Cost::scaled(2, 1, 3).raw(), 5);
         assert_eq!(Cost::scaled(2, 1, 3).effective(&[-1]), 4);
         assert_eq!(Cost::Fixed(3).effective_scaled(&[], 0.5), 2);
+        assert_eq!(Cost::Fixed(3).effective_scaled(&[], -1.0), 0);
     }
 
     #[test]

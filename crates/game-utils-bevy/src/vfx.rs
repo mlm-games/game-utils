@@ -50,6 +50,8 @@ pub struct TrailEmitter {
 #[derive(Component)]
 pub struct TrailGhost {
     pub timer: Timer,
+    /// Alpha at spawn; the fade scales from here to 0.
+    pub base_alpha: f32,
 }
 
 pub struct VfxSpawner;
@@ -172,6 +174,7 @@ fn emit_trails(
                 Transform::from_translation(tf.translation.truncate().extend(1.0)),
                 TrailGhost {
                     timer: Timer::from_seconds(emitter.ghost_lifetime, TimerMode::Once),
+                    base_alpha: 0.6,
                 },
             ));
         }
@@ -185,7 +188,7 @@ fn animate_trail_ghosts(
 ) {
     for (e, mut sprite, mut ghost) in &mut q {
         ghost.timer.tick(time.delta());
-        let a = (1.0 - ghost.timer.fraction()).clamp(0.0, 1.0);
+        let a = (1.0 - ghost.timer.fraction()).clamp(0.0, 1.0) * ghost.base_alpha;
         sprite.color.set_alpha(a);
         if ghost.timer.just_finished() {
             commands.entity(e).despawn();
