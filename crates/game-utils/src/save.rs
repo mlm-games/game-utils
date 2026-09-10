@@ -100,7 +100,7 @@ impl<S: Storage> SaveManager<S> {
 
     #[cfg(target_arch = "wasm32")]
     pub fn data_dir(&self) -> PathBuf {
-        // `opfs` `sync::Fs` hydrates from
+        // `ropfs` `sync::Fs` hydrates from
         // localStorage on first use, so this path is virtual but persistent.
         let dir = PathBuf::from(format!("{}-{}-{}", self.qualifier, self.org, self.app));
         let _ = self.storage.create_dir_all(&dir);

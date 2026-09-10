@@ -104,43 +104,43 @@ impl Storage for FsStorage {
 #[cfg(target_arch = "wasm32")]
 impl Storage for FsStorage {
     fn create_dir_all(&self, path: &Path) -> io::Result<()> {
-        Self::opfs().create_dir_all(path)
+        Self::ropfs().create_dir_all(path)
     }
     fn read(&self, path: &Path) -> io::Result<Option<Vec<u8>>> {
-        Self::opfs().read(path)
+        Self::ropfs().read(path)
     }
     fn write(&self, path: &Path, data: &[u8]) -> io::Result<()> {
-        Self::opfs().write(path, data)
+        Self::ropfs().write(path, data)
     }
     fn rename(&self, from: &Path, to: &Path) -> io::Result<()> {
-        Self::opfs().rename(from, to)
+        Self::ropfs().rename(from, to)
     }
     fn copy(&self, from: &Path, to: &Path) -> io::Result<u64> {
-        Self::opfs().copy(from, to)
+        Self::ropfs().copy(from, to)
     }
     fn remove_file(&self, path: &Path) -> io::Result<()> {
-        Self::opfs().remove_file(path)
+        Self::ropfs().remove_file(path)
     }
     fn remove_dir_all(&self, path: &Path) -> io::Result<()> {
-        Self::opfs().remove_dir_all(path)
+        Self::ropfs().remove_dir_all(path)
     }
     fn exists(&self, path: &Path) -> bool {
-        Self::opfs().exists(path)
+        Self::ropfs().exists(path)
     }
     fn is_dir(&self, path: &Path) -> bool {
-        Self::opfs().is_dir(path)
+        Self::ropfs().is_dir(path)
     }
     fn is_file(&self, path: &Path) -> bool {
-        Self::opfs().is_file(path)
+        Self::ropfs().is_file(path)
     }
     fn metadata_len(&self, path: &Path) -> Option<u64> {
-        Self::opfs().metadata_len(path)
+        Self::ropfs().metadata_len(path)
     }
     fn mtime_secs(&self, path: &Path) -> Option<u64> {
-        Self::opfs().mtime_secs(path)
+        Self::ropfs().mtime_secs(path)
     }
     fn read_dir(&self, path: &Path) -> io::Result<Vec<PathBuf>> {
-        Self::opfs().read_dir(path)
+        Self::ropfs().read_dir(path)
     }
     fn sync_file(&self, _path: &Path) {}
     fn sync_dir(&self, _path: &Path) {}
@@ -148,63 +148,127 @@ impl Storage for FsStorage {
 
 #[cfg(target_arch = "wasm32")]
 impl FsStorage {
-    fn opfs() -> &'static OpfsStorage {
+    fn ropfs() -> &'static RopfsStorage {
         use std::sync::OnceLock;
-        static OPFS: OnceLock<OpfsStorage> = OnceLock::new();
-        OPFS.get_or_init(OpfsStorage::new)
+        static ROPFS: OnceLock<RopfsStorage> = OnceLock::new();
+        ROPFS.get_or_init(|| {
+            migrate_opfs_to_ropfs();
+            RopfsStorage::new()
+        })
     }
 }
 
-/// On wasm, `opfs::sync::Fs` is origin-private `localStorage` sync, on native it is `std::fs`.
+/// One-time, non-destructive migration of wasm `localStorage` keys written by
+/// the old `opfs` crate (`opfs:` prefix, raw UTF-8 values) to the `ropfs`
+/// crate layout (`ropfs:` prefix, base64 values).
+///
+/// Copies each `opfs:<rest>` entry to `ropfs:<rest>` only when the destination
+/// does not already exist, so it never overwrites newer data. Old values are
+/// copied verbatim: `ropfs` base64-decodes with a raw-bytes fallback, so stale
+/// raw entries stay readable until their next write re-encodes them. The old
+/// keys are left behind; safe to run repeatedly.
+///
+/// Runs automatically on first [`FsStorage`] use on wasm. Call it explicitly
+/// if you construct [`RopfsStorage`] directly (bypassing `FsStorage`), before
+/// the first read.
+///
+/// To delete after a few minor bumps
 #[cfg(target_arch = "wasm32")]
-pub use opfs::sync::Fs as OpfsStorage;
+pub fn migrate_opfs_to_ropfs() {
+    const OLD_PREFIX: &str = "opfs:";
+    const NEW_PREFIX: &str = "ropfs:";
+
+    let Some(ls) = web_sys::window()
+        .and_then(|w| w.local_storage().ok())
+        .flatten()
+    else {
+        return;
+    };
+    let len = ls.length().ok().unwrap_or(0);
+    // Snapshot keys first: `set_item` during iteration would shift indices.
+    let mut old_keys = Vec::new();
+    for i in 0..len {
+        if let Ok(Some(k)) = ls.key(i) {
+            if k.starts_with(OLD_PREFIX) {
+                old_keys.push(k);
+            }
+        }
+    }
+    for old_key in old_keys {
+        let rest = &old_key[OLD_PREFIX.len()..];
+        let new_key = format!("{NEW_PREFIX}{rest}");
+        // Never overwrite newer `ropfs:` data.
+        if ls.get_item(&new_key).ok().flatten().is_some() {
+            continue;
+        }
+        if let Ok(Some(v)) = ls.get_item(&old_key) {
+            let _ = ls.set_item(&new_key, &v);
+        }
+    }
+}
+
+/// On wasm, `ropfs::sync::Fs` is a `localStorage`-backed shim (not OPFS:
+/// ~5 MB quota, string-only storage with base64-encoded values); on native
+/// it delegates to `std::fs`. Prefer the async `ropfs` OPFS backend on the
+/// web for large or strictly durable data.
+#[cfg(target_arch = "wasm32")]
+pub use ropfs::sync::Fs as RopfsStorage;
+
+/// Kept for compatibility after the `opfs` crate was renamed to `ropfs`.
+/// New code should use [`RopfsStorage`].
+#[cfg(target_arch = "wasm32")]
+#[deprecated(
+    since = "0.2.0",
+    note = "The `opfs` crate was renamed to `ropfs`; use `RopfsStorage` instead."
+)]
+pub use ropfs::sync::Fs as OpfsStorage;
 
 #[cfg(target_arch = "wasm32")]
-impl Storage for OpfsStorage {
+impl Storage for RopfsStorage {
     fn create_dir_all(&self, path: &Path) -> io::Result<()> {
-        OpfsStorage::create_dir_all(self, path)
+        RopfsStorage::create_dir_all(self, path)
     }
     fn read(&self, path: &Path) -> io::Result<Option<Vec<u8>>> {
-        OpfsStorage::read(self, path)
+        RopfsStorage::read(self, path)
     }
     fn write(&self, path: &Path, data: &[u8]) -> io::Result<()> {
-        OpfsStorage::write(self, path, data)
+        RopfsStorage::write(self, path, data)
     }
     fn rename(&self, from: &Path, to: &Path) -> io::Result<()> {
-        OpfsStorage::rename(self, from, to)
+        RopfsStorage::rename(self, from, to)
     }
     fn copy(&self, from: &Path, to: &Path) -> io::Result<u64> {
-        OpfsStorage::copy(self, from, to)
+        RopfsStorage::copy(self, from, to)
     }
     fn remove_file(&self, path: &Path) -> io::Result<()> {
-        OpfsStorage::remove_file(self, path)
+        RopfsStorage::remove_file(self, path)
     }
     fn remove_dir_all(&self, path: &Path) -> io::Result<()> {
-        OpfsStorage::remove_dir_all(self, path)
+        RopfsStorage::remove_dir_all(self, path)
     }
     fn exists(&self, path: &Path) -> bool {
-        OpfsStorage::exists(self, path)
+        RopfsStorage::exists(self, path)
     }
     fn is_dir(&self, path: &Path) -> bool {
-        OpfsStorage::is_dir(self, path)
+        RopfsStorage::is_dir(self, path)
     }
     fn is_file(&self, path: &Path) -> bool {
-        OpfsStorage::is_file(self, path)
+        RopfsStorage::is_file(self, path)
     }
     fn metadata_len(&self, path: &Path) -> Option<u64> {
-        OpfsStorage::metadata_len(self, path)
+        RopfsStorage::metadata_len(self, path)
     }
     fn mtime_secs(&self, path: &Path) -> Option<u64> {
-        OpfsStorage::mtime_secs(self, path)
+        RopfsStorage::mtime_secs(self, path)
     }
     fn read_dir(&self, path: &Path) -> io::Result<Vec<PathBuf>> {
-        OpfsStorage::read_dir(self, path)
+        RopfsStorage::read_dir(self, path)
     }
     fn sync_file(&self, path: &Path) {
-        OpfsStorage::sync_file(self, path)
+        RopfsStorage::sync_file(self, path)
     }
     fn sync_dir(&self, path: &Path) {
-        OpfsStorage::sync_dir(self, path)
+        RopfsStorage::sync_dir(self, path)
     }
 }
 /// In-memory `Storage` for hermetic tests. Shares an `Arc<RwLock<HashMap>>` so

@@ -14,8 +14,8 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 /// Bevy-agnostic [`SaveManager`] as a sim resource. Generic over the
-/// storage backend (defaults to [`FsStorage`]): pass a wasm OPFS or
-/// custom backend via [`SaveResource::new_with_storage`] /
+/// storage backend (defaults to [`FsStorage`]): pass a wasm `ropfs` sync
+/// (`localStorage`) or custom backend via [`SaveResource::new_with_storage`] /
 /// [`SaveResource::from_manager`].
 #[derive(Resource, Clone)]
 pub struct SaveResource<S: Storage = FsStorage>(pub SaveManager<S>);
@@ -39,7 +39,7 @@ impl SaveResource<FsStorage> {
 }
 
 impl<S: Storage> SaveResource<S> {
-    /// Build with an explicit storage backend (wasm OPFS, in-memory,
+    /// Build with an explicit storage backend (wasm `ropfs` sync shim, in-memory,
     /// encrypted, …). The plain [`SaveResource::new`] keeps working for
     /// native `fs` games.
     pub fn new_with_storage(
