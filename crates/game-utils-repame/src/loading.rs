@@ -1,44 +1,39 @@
-//! Sim-side loading progress: track asset/catalog loads as plain data.
+//! Sim-side loading progress: the engine-agnostic
+//! [`LoadingProgress`](game_utils::loading::LoadingProgress) as a
+//! `bevy_ecs` resource.
 //!
-//! Producers bump [`LoadingProgress`] as loads complete; transitions gate
-//! on [`LoadingProgress::is_ready`]. No `bevy_asset` dependency.
+//! The counter math lives in `game-utils` core (shared with Bevy games);
+//! this module is only the `Resource` derive + [`register_loading`]
+//! constructor for `repame-sim` worlds. No `bevy_asset` dependency.
 
 use bevy_ecs::prelude::*;
+use game_utils::loading::LoadingProgress;
 
-/// Fractional load tracker (`done` of `total`).
+/// `Resource` marker for the core counter, so games can
+/// `world.init_resource` / `Res<LoadingProgress>` it directly.
 #[derive(Resource, Debug, Clone, Default)]
-pub struct LoadingProgress {
-    pub done: u32,
-    pub total: u32,
+pub struct LoadingResource(pub LoadingProgress);
+
+impl LoadingResource {
+    pub fn new(total: u32) -> Self {
+        Self(LoadingProgress::new(total))
+    }
 }
 
-impl LoadingProgress {
-    pub fn new(total: u32) -> Self {
-        Self { done: 0, total }
+impl std::ops::Deref for LoadingResource {
+    type Target = LoadingProgress;
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
+}
 
-    pub fn advance(&mut self) {
-        self.done = self.done.saturating_add(1);
-    }
-
-    pub fn set(&mut self, done: u32, total: u32) {
-        self.done = done.min(total);
-        self.total = total;
-    }
-
-    pub fn fraction(&self) -> f32 {
-        if self.total == 0 {
-            return 1.0;
-        }
-        (self.done.min(self.total) as f32) / (self.total as f32)
-    }
-
-    pub fn is_ready(&self) -> bool {
-        self.done >= self.total
+impl std::ops::DerefMut for LoadingResource {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
 /// Insert a fresh tracker expecting `total` loads.
 pub fn register_loading(world: &mut World, total: u32) {
-    world.insert_resource(LoadingProgress::new(total));
+    world.insert_resource(LoadingResource::new(total));
 }

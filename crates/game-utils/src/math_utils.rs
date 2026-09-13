@@ -113,6 +113,55 @@ impl MathUtils {
         let t = 1.0 - (-speed * dt).exp();
         current + (target - current) * t
     }
+
+    /// Back-eased pop-in scale (overshoots past 1.0, settles at 1.0).
+    /// Renderer-free twin of the `game-utils-bevy` juice pop-in curve:
+    /// same math, `glam` in/out, no `Transform` writes.
+    pub fn pop_scale(t: f32) -> f32 {
+        let overshoot = 1.70158;
+        let t2 = t.clamp(0.0, 1.0) - 1.0;
+        t2 * t2 * ((overshoot + 1.0) * t2 + overshoot) + 1.0
+    }
+
+    /// Squash-and-stretch XY scale: ramps to `amount` in the first half,
+    /// relaxes back to 1.0 in the second half. Renderer-free twin of the
+    /// `game-utils-bevy` squash-stretch curve.
+    pub fn squash_stretch_xy(t: f32, amount: Vec2) -> Vec2 {
+        let t = t.clamp(0.0, 1.0);
+        if t < 0.5 {
+            let u = t / 0.5;
+            Vec2::new(1.0 + (amount.x - 1.0) * u, 1.0 + (amount.y - 1.0) * u)
+        } else {
+            let u = (t - 0.5) / 0.5;
+            amount + (Vec2::ONE - amount) * u
+        }
+    }
+
+    /// Bounce scale: peaks at 30% of the duration, relaxes to 1.0.
+    /// Renderer-free twin of the `game-utils-bevy` bounce-scale curve.
+    pub fn bounce_wave(t: f32, peak: f32) -> f32 {
+        let t = t.clamp(0.0, 1.0);
+        if t < 0.3 {
+            1.0 + (peak - 1.0) * (t / 0.3)
+        } else {
+            peak + (1.0 - peak) * ((t - 0.3) / 0.7)
+        }
+    }
+
+    /// Decaying sinusoidal shake offset for `elapsed_secs` of wall time.
+    /// Renderer-free twin of the `game-utils-bevy` shake curve.
+    pub fn shake_offset(elapsed_secs: f32, intensity: f32, decay: f32) -> Vec2 {
+        let d = decay.clamp(0.0, 1.0);
+        Vec2::new(
+            (elapsed_secs * 50.0).sin() * intensity * d,
+            (elapsed_secs * 47.0).cos() * intensity * d,
+        )
+    }
+
+    /// Overwrite a velocity with a directional knockback impulse.
+    pub fn knockback(velocity: &mut Vec2, dir: Vec2, force: f32) {
+        *velocity = dir.normalize_or_zero() * force;
+    }
 }
 
 #[cfg(test)]
@@ -150,6 +199,21 @@ mod tests {
         assert_eq!(MathUtils::ease_out_cubic(0.0), 0.0);
         assert_eq!(MathUtils::ease_out_cubic(1.0), 1.0);
         assert!(MathUtils::ease_out_cubic(0.5) > 0.5);
+    }
+
+    #[test]
+    fn feel_curves_hold_shape() {
+        assert!((MathUtils::pop_scale(1.0) - 1.0).abs() < 1e-4);
+        assert!(MathUtils::pop_scale(0.5) > 1.0);
+        let end = MathUtils::squash_stretch_xy(1.0, Vec2::new(1.3, 0.7));
+        assert!((end - Vec2::ONE).length() < 1e-6);
+        assert!((MathUtils::bounce_wave(1.0, 1.5) - 1.0).abs() < 1e-6);
+        assert!(MathUtils::bounce_wave(0.15, 1.5) > 1.0);
+        let off = MathUtils::shake_offset(1.0, 10.0, 0.0);
+        assert_eq!(off, Vec2::ZERO);
+        let mut v = Vec2::ZERO;
+        MathUtils::knockback(&mut v, Vec2::X, 5.0);
+        assert_eq!(v, Vec2::new(5.0, 0.0));
     }
 
     #[test]

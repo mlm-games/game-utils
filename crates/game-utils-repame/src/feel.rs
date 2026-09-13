@@ -18,47 +18,33 @@ pub fn ease_out_cubic(t: f32) -> f32 {
 }
 
 /// Back-eased pop-in scale (overshoots past 1.0, settles at 1.0).
+/// Canonical [`MathUtils::pop_scale`](game_utils::math_utils::MathUtils::pop_scale).
 pub fn pop_scale(t: f32) -> f32 {
-    let overshoot = 1.70158;
-    let t2 = t.clamp(0.0, 1.0) - 1.0;
-    t2 * t2 * ((overshoot + 1.0) * t2 + overshoot) + 1.0
+    MathUtils::pop_scale(t)
 }
 
-/// Squash-and-stretch XY scale: ramps to `amount` in the first half,
-/// relaxes back to 1.0 in the second half.
+/// Squash-and-stretch XY scale. Canonical
+/// [`MathUtils::squash_stretch_xy`](game_utils::math_utils::MathUtils::squash_stretch_xy).
 pub fn squash_stretch_xy(t: f32, amount: Vec2) -> Vec2 {
-    let t = t.clamp(0.0, 1.0);
-    if t < 0.5 {
-        let u = t / 0.5;
-        Vec2::new(1.0 + (amount.x - 1.0) * u, 1.0 + (amount.y - 1.0) * u)
-    } else {
-        let u = (t - 0.5) / 0.5;
-        amount + (Vec2::ONE - amount) * u
-    }
+    MathUtils::squash_stretch_xy(t, amount)
 }
 
-/// Bounce scale: peaks at 30% of the duration, relaxes to 1.0.
+/// Bounce scale. Canonical
+/// [`MathUtils::bounce_wave`](game_utils::math_utils::MathUtils::bounce_wave).
 pub fn bounce_wave(t: f32, peak: f32) -> f32 {
-    let t = t.clamp(0.0, 1.0);
-    if t < 0.3 {
-        1.0 + (peak - 1.0) * (t / 0.3)
-    } else {
-        peak + (1.0 - peak) * ((t - 0.3) / 0.7)
-    }
+    MathUtils::bounce_wave(t, peak)
 }
 
-/// Decaying sinusoidal shake offset for `elapsed_secs` of wall time.
+/// Decaying sinusoidal shake offset. Canonical
+/// [`MathUtils::shake_offset`](game_utils::math_utils::MathUtils::shake_offset).
 pub fn shake_offset(elapsed_secs: f32, intensity: f32, decay: f32) -> Vec2 {
-    let d = decay.clamp(0.0, 1.0);
-    Vec2::new(
-        (elapsed_secs * 50.0).sin() * intensity * d,
-        (elapsed_secs * 47.0).cos() * intensity * d,
-    )
+    MathUtils::shake_offset(elapsed_secs, intensity, decay)
 }
 
-/// Overwrite a velocity with a directional knockback impulse.
+/// Overwrite a velocity with a directional knockback impulse. Canonical
+/// [`MathUtils::knockback`](game_utils::math_utils::MathUtils::knockback).
 pub fn knockback(velocity: &mut Vec2, dir: Vec2, force: f32) {
-    *velocity = dir.normalize_or_zero() * force;
+    MathUtils::knockback(velocity, dir, force)
 }
 
 /// Recoil kick on an entity: applied additively on top of gameplay
@@ -244,6 +230,22 @@ mod tests {
     fn squash_returns_to_one() {
         let end = squash_stretch_xy(1.0, Vec2::new(1.3, 0.7));
         assert!((end - Vec2::ONE).length() < 1e-6);
+    }
+
+    #[test]
+    fn delegation_matches_canonical_math() {
+        // Thin wrappers: pin agreement with `MathUtils`, shape goldens
+        // live upstream in `game-utils`.
+        assert_eq!(pop_scale(0.5), MathUtils::pop_scale(0.5));
+        assert_eq!(
+            squash_stretch_xy(0.25, Vec2::new(1.3, 0.7)),
+            MathUtils::squash_stretch_xy(0.25, Vec2::new(1.3, 0.7))
+        );
+        assert_eq!(bounce_wave(0.15, 1.5), MathUtils::bounce_wave(0.15, 1.5));
+        assert_eq!(
+            shake_offset(1.0, 10.0, 0.5),
+            MathUtils::shake_offset(1.0, 10.0, 0.5)
+        );
     }
 
     #[test]
