@@ -1,6 +1,7 @@
 use bevy_app::prelude::*;
 use bevy_ecs::prelude::*;
 use bevy_time::{Real, Time, Timer, TimerMode};
+use game_utils::math_utils::MathUtils;
 
 use crate::time_scale::TimeScaleControl;
 
@@ -54,11 +55,6 @@ impl HitStop {
     }
 }
 
-fn ease_out_cubic(t: f32) -> f32 {
-    let u = t - 1.0;
-    u * u * u + 1.0
-}
-
 fn tick_hitstop(
     real: Res<Time<Real>>,
     mut hs: ResMut<HitStop>,
@@ -70,7 +66,7 @@ fn tick_hitstop(
     }
     hs.recover.tick(real.delta());
     let t = hs.recover.fraction().clamp(0.0, 1.0);
-    hs.scale = hs.start_scale + (1.0 - hs.start_scale) * ease_out_cubic(t);
+    hs.scale = hs.start_scale + (1.0 - hs.start_scale) * MathUtils::ease_out_cubic(t);
     ctrl.hitstop_scale = hs.scale.max(0.01);
     if hs.recover.just_finished() {
         hs.active = false;

@@ -34,7 +34,7 @@ pub mod pooling;
 pub mod save;
 pub mod sim_time;
 
-pub use feel::{Recoil, knockback};
+pub use feel::{CameraLimits, Recoil, apply_limits, knockback, smooth_toward};
 pub use i18n::{I18nStrings, register_i18n};
 pub use loading::{LoadingProgress, register_loading};
 pub use pooling::{DEFAULT_MAX_SIZE, EntityPool, ObjectPool, PoolHidden, scrub_dead};
@@ -42,10 +42,9 @@ pub use save::{SaveResource, SaveResult, register_save};
 pub use sim_time::{FeelIntensity, HitStop, SlowMotion, TimeScaleControl};
 
 pub use game_utils::{
-    achievements as core_achievements, codex as core_codex, i18n as core_i18n,
-    math_utils, profiles as core_profiles, save as core_save,
-    save_store as core_save_store, stats as core_stats, unlock as core_unlock,
-    weighted as core_weighted,
+    achievements as core_achievements, codex as core_codex, i18n as core_i18n, math_utils,
+    profiles as core_profiles, save as core_save, save_store as core_save_store,
+    stats as core_stats, unlock as core_unlock, weighted as core_weighted,
 };
 
 use bevy_ecs::prelude::World;
@@ -64,7 +63,10 @@ pub fn init_time_resources(world: &mut World) {
 ///
 /// Currently identical to [`init_time_resources`]; only `sim_time` has
 /// arg-free resources. Kept for compatibility.
-#[deprecated(since = "0.1.2", note = "use `init_time_resources`; pooling/save/i18n/loading need their own `register_*` calls")]
+#[deprecated(
+    since = "0.1.2",
+    note = "use `init_time_resources`; pooling/save/i18n/loading need their own `register_*` calls"
+)]
 pub fn init_resources(world: &mut World) {
     init_time_resources(world);
 }

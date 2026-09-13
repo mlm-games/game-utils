@@ -7,9 +7,9 @@
 
 use std::ops::{Deref, DerefMut};
 
+use bevy_ecs::prelude::*;
 use game_utils::save::{SaveManager, Versioned};
 use game_utils::storage::{FsStorage, Storage};
-use bevy_ecs::prelude::*;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 

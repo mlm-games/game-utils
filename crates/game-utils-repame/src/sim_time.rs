@@ -31,13 +31,12 @@
 //!
 //! Feel intensity ([`FeelIntensity`]) honors NT-style options-menu sliders:
 //! `freezeframes` scales hitstop recovery (0 disables the dip outright),
-//! `screenshake` is applied game-side at trauma call sites
-//! (`trauma.add(amount * intensity.screenshake)`).
+//! `screenshake` scales trauma amounts via [`FeelIntensity::shake`]
+//! (`trauma.add(intensity.shake(amount))`).
 
 use bevy_ecs::prelude::*;
+use game_utils::math_utils::MathUtils;
 use repame_sim::{Sim, SimTime};
-
-use crate::feel::ease_out_cubic;
 
 /// Options-menu feel multipliers (NT "FREEZE FRAMES" / "SCREENSHAKE").
 ///
@@ -49,8 +48,9 @@ pub struct FeelIntensity {
     /// Hitstop recovery-duration multiplier. `1.0` = full effect,
     /// `0.0` = hitstop dips disabled (trigger is a no-op visually).
     pub freezeframes: f32,
-    /// Screen-shake magnitude multiplier, applied game-side at each
-    /// `trauma.add(amount * screenshake)` call site. `1.0` = full shake.
+    /// Screen-shake magnitude multiplier, applied via
+    /// [`FeelIntensity::shake`] at each `trauma.add(...)` call site.
+    /// `1.0` = full shake.
     pub screenshake: f32,
 }
 
@@ -60,6 +60,16 @@ impl Default for FeelIntensity {
             freezeframes: 1.0,
             screenshake: 1.0,
         }
+    }
+}
+
+impl FeelIntensity {
+    /// Scale a trauma amount by the `screenshake` slider. Call at each
+    /// trauma site — `trauma.add(intensity.shake(amount))` — so the
+    /// options-menu slider is honored in one place instead of at every
+    /// call site by hand.
+    pub fn shake(&self, amount: f32) -> f32 {
+        amount * self.screenshake.max(0.0)
     }
 }
 
@@ -189,7 +199,7 @@ impl HitStop {
         }
         self.elapsed += dt;
         let t = (self.elapsed / duration).clamp(0.0, 1.0);
-        self.scale = self.start_scale + (1.0 - self.start_scale) * ease_out_cubic(t);
+        self.scale = self.start_scale + (1.0 - self.start_scale) * MathUtils::ease_out_cubic(t);
         if t >= 1.0 {
             self.active = false;
             self.scale = 1.0;
@@ -319,7 +329,8 @@ mod tests {
     }
 
     #[test]
-    fn scaled_delta_gates_on_freeze_and_scales() {        let time = SimTime {
+    fn scaled_delta_gates_on_freeze_and_scales() {
+        let time = SimTime {
             elapsed_secs: 0.0,
             delta_secs: 1.0 / 60.0,
         };

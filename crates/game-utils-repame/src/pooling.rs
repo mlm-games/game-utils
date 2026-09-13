@@ -250,13 +250,9 @@ mod tests {
         // the stale 99.0 nor the bare default survives).
         let _ = world.run_system_once(
             |mut pool: ResMut<EntityPool<Shell>>, mut commands: Commands| {
-                let _e = ObjectPool::acquire(
-                    &mut pool,
-                    &mut commands,
-                    |ec| {
-                        ec.insert(Shell { speed: 7.0 });
-                    },
-                )
+                let _e = ObjectPool::acquire(&mut pool, &mut commands, |ec| {
+                    ec.insert(Shell { speed: 7.0 });
+                })
                 .unwrap();
                 assert_eq!(pool.active_count(), 1);
             },
@@ -298,11 +294,23 @@ mod tests {
         let _ = world.run_system_once(
             |mut pool: ResMut<EntityPool<Bullet>>, mut commands: Commands| {
                 let stray = commands.spawn_empty().id();
-                assert!(!ObjectPool::try_release::<Bullet>(&mut pool, stray, &mut commands));
+                assert!(!ObjectPool::try_release::<Bullet>(
+                    &mut pool,
+                    stray,
+                    &mut commands
+                ));
                 let e = ObjectPool::acquire(&mut pool, &mut commands, |_| {}).unwrap();
-                assert!(ObjectPool::try_release::<Bullet>(&mut pool, e, &mut commands));
+                assert!(ObjectPool::try_release::<Bullet>(
+                    &mut pool,
+                    e,
+                    &mut commands
+                ));
                 // Double release is a no-op that reports false.
-                assert!(!ObjectPool::try_release::<Bullet>(&mut pool, e, &mut commands));
+                assert!(!ObjectPool::try_release::<Bullet>(
+                    &mut pool,
+                    e,
+                    &mut commands
+                ));
             },
         );
     }
@@ -322,10 +330,8 @@ mod tests {
         let (active, pooled) = world
             .run_system_once(
                 |mut pool: ResMut<EntityPool<Bullet>>, mut commands: Commands| {
-                    let active =
-                        ObjectPool::acquire(&mut pool, &mut commands, |_| {}).unwrap();
-                    let pooled =
-                        ObjectPool::acquire(&mut pool, &mut commands, |_| {}).unwrap();
+                    let active = ObjectPool::acquire(&mut pool, &mut commands, |_| {}).unwrap();
+                    let pooled = ObjectPool::acquire(&mut pool, &mut commands, |_| {}).unwrap();
                     ObjectPool::release::<Bullet>(&mut pool, pooled, &mut commands);
                     (active, pooled)
                 },
@@ -334,7 +340,8 @@ mod tests {
         world.flush();
         world.despawn(active);
         world.despawn(pooled);
-        world.run_system_once(scrub_dead::<Bullet>)
+        world
+            .run_system_once(scrub_dead::<Bullet>)
             .expect("scrub system runs");
         let pool = world.resource::<EntityPool<Bullet>>();
         assert_eq!(pool.active_count(), 0);

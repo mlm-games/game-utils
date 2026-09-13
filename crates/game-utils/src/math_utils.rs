@@ -86,6 +86,33 @@ impl MathUtils {
         *velocity = Vec3::new(vx, vy, vz);
         Vec3::new(x, y, z)
     }
+
+    /// Cubic ease-out 0..1. Shared by hitstop recovery (Bevy + repame
+    /// sim-time) so both ease with the same curve.
+    pub fn ease_out_cubic(t: f32) -> f32 {
+        let u = t.clamp(0.0, 1.0) - 1.0;
+        u * u * u + 1.0
+    }
+
+    /// Ease the camera toward its follow target.
+    ///
+    /// Moves `current` toward `target` with exponential smoothing at `speed`
+    /// world units per second: fast when far away, settling gently without
+    /// overshooting. Large `speed` values approach a snap; the motion is
+    /// frame-rate independent for a fixed `dt`.
+    ///
+    /// - `speed <= 0` (or non-finite) snaps directly to `target`.
+    /// - `dt <= 0` holds `current` (a paused frame never moves the camera).
+    pub fn smooth_toward_vec2(current: Vec2, target: Vec2, speed: f32, dt: f32) -> Vec2 {
+        if dt <= 0.0 {
+            return current;
+        }
+        if speed <= 0.0 || !speed.is_finite() {
+            return target;
+        }
+        let t = 1.0 - (-speed * dt).exp();
+        current + (target - current) * t
+    }
 }
 
 #[cfg(test)]
@@ -116,5 +143,32 @@ mod tests {
         assert!((MathUtils::wave(0.0, 10.0, 2.0, 0.0, 0.5) - 10.0).abs() < 1e-5);
         assert!((MathUtils::wave(0.0, 10.0, 2.0, 0.0, 1.0) - 5.0).abs() < 1e-5);
         assert_eq!(MathUtils::wave(0.0, 10.0, 0.0, 0.0, 1.0), 0.0);
+    }
+
+    #[test]
+    fn golden_ease_out_cubic() {
+        assert_eq!(MathUtils::ease_out_cubic(0.0), 0.0);
+        assert_eq!(MathUtils::ease_out_cubic(1.0), 1.0);
+        assert!(MathUtils::ease_out_cubic(0.5) > 0.5);
+    }
+
+    #[test]
+    fn smooth_toward_converges() {
+        let target = Vec2::new(100.0, 0.0);
+        let p1 = MathUtils::smooth_toward_vec2(Vec2::ZERO, target, 5.0, 0.016);
+        assert!(p1.x > 0.0 && p1.x < 100.0);
+        let mut p = Vec2::ZERO;
+        for _ in 0..600 {
+            p = MathUtils::smooth_toward_vec2(p, target, 5.0, 0.016);
+        }
+        assert!((p - target).length() < 0.01, "got {p:?}");
+        assert_eq!(
+            MathUtils::smooth_toward_vec2(Vec2::ONE, target, 0.0, 0.016),
+            target
+        );
+        assert_eq!(
+            MathUtils::smooth_toward_vec2(Vec2::ONE, target, 5.0, 0.0),
+            Vec2::ONE
+        );
     }
 }
