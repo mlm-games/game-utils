@@ -19,50 +19,6 @@ unic-langid = "0.9"
 fluent-bundle = "0.16"
 rand = "0.10"
 web-time = "1.1"
-bevy = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ffb6e5492ebb7c059ac8af", default-features = false, features = [
-    "bevy_asset",
-    "bevy_audio",
-    "bevy_camera",
-    "bevy_color",
-    "bevy_log",
-    "bevy_shader",
-    "bevy_sprite",
-    "bevy_state",
-    "bevy_text",
-    "bevy_ui",
-    "bevy_window",
-    "reflect_auto_register",
-    "keyboard",
-    "mouse",
-    "gamepad",
-    "std",
-    "async_executor",
-] }
-# NOTE: `bevy_render` / `bevy_core_pipeline` (the wgpu backend) are intentionally
-# NOT in the base list above, so default builds stay wgpu-free and can coexist
-# with other wgpu versions (e.g. ../repose pins wgpu 30 directly).
-# They are enabled opt-in via `game-utils-bevy/render`
-# (`bevy/bevy_render`, `bevy/bevy_core_pipeline`).
-# Wgpu-free granular deps (same bevy rev) for crates that must not pull wgpu.
-bevy_ecs = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ffb6e5492ebb7c059ac8af" }
-bevy_app = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ffb6e5492ebb7c059ac8af" }
-bevy_time = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ffb6e5492ebb7c059ac8af" }
-bevy_math = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ffb6e5492ebb7c059ac8af" }
-bevy_transform = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ffb6e5492ebb7c059ac8af" }
-# render-gated modules pull wgpu only via `render`.
-bevy_asset = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ffb6e5492ebb7c059ac8af" }
-bevy_audio = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ffb6e5492ebb7c059ac8af" }
-bevy_camera = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ffb6e5492ebb7c059ac8af" }
-bevy_color = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ffb6e5492ebb7c059ac8af" }
-bevy_core_pipeline = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ffb6e5492ebb7c059ac8af" }
-bevy_input = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ffb6e5492ebb7c059ac8af" }
-bevy_log = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ffb6e5492ebb7c059ac8af" }
-bevy_render = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ffb6e5492ebb7c059ac8af" }
-bevy_shader = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ffb6e5492ebb7c059ac8af" }
-bevy_sprite = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ffb6e5492ebb7c059ac8af" }
-bevy_state = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ffb6e5492ebb7c059ac8af" }
-bevy_text = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ffb6e5492ebb7c059ac8af" }
-bevy_ui = { git = "https://github.com/bevyengine/bevy", rev = "fb89a8649d9b359e53ffb6e5492ebb7c059ac8af" }
 game-utils = { path = "crates/game-utils", version = "0.3.3" }
 game-utils-ai = { path = "crates/game-utils-ai", version = "0.3.3" }
 game-utils-combat = { path = "crates/game-utils-combat", version = "0.3.3" }
