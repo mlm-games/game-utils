@@ -1,6 +1,7 @@
 //! Ground queries for suspension raycasts. Models ask a
 //! [`GroundProbe`] for ground under each wheel; plug in [`FlatGround`],
-//! a stub, or the `rapier`-feature pipeline probe.
+//! a stub, the `rapier`-feature pipeline probe, or a `repame-rapier3d`
+//! world (see `repame_backend`).
 
 use glam::Vec3;
 use serde::{Deserialize, Serialize};
@@ -145,6 +146,68 @@ pub mod rapier_backend {
                 surface,
             })
         }
+    }
+}
+
+#[cfg(feature = "repame-rapier")]
+pub mod repame_backend {
+    use super::{GroundHit, GroundProbe};
+    use glam::Vec3;
+
+    pub struct RepameGround<'a> {
+        world: &'a repame_rapier3d::RapierWorld3d,
+    }
+
+    impl<'a> RepameGround<'a> {
+        pub fn new(world: &'a repame_rapier3d::RapierWorld3d) -> Self {
+            Self { world }
+        }
+    }
+
+    impl GroundProbe for RepameGround<'_> {
+        fn probe(&self, origin: Vec3, dir: Vec3, max_dist: f32) -> Option<GroundHit> {
+            let hit = self.world.cast_ray(origin, dir, max_dist, true)?;
+            Some(GroundHit {
+                distance: hit.distance,
+                point: hit.point,
+                normal: hit.normal,
+                surface: hit.surface,
+            })
+        }
+    }
+}
+
+#[cfg(all(test, feature = "repame-rapier"))]
+mod repame_tests {
+    use super::repame_backend::RepameGround;
+    use super::*;
+    use repame_rapier3d::{BodyKind, RapierBody3d};
+
+    #[test]
+    fn repame_ground_probe_hits() {
+        let mut sim = repame_rapier3d::repame_sim::Sim::with_default_step();
+        repame_rapier3d::init_world(&mut sim.world, Vec3::new(0.0, -9.81, 0.0), 1.0);
+        sim.world.spawn(RapierBody3d {
+            kind: BodyKind::Fixed,
+            spawn_pos: Vec3::new(0.0, -0.1, 0.0),
+            half_extents: Vec3::new(10.0, 0.1, 10.0),
+            ..Default::default()
+        });
+        repame_rapier3d::register_rapier3d_systems(&mut sim);
+        sim.tick();
+        sim.tick();
+        let world = sim.world.resource::<repame_rapier3d::RapierWorld3d>();
+        let probe = RepameGround::new(world);
+        let hit = probe
+            .probe(Vec3::new(0.0, 5.0, 0.0), Vec3::NEG_Y, 10.0)
+            .expect("should hit the ground cuboid");
+        assert!((hit.distance - 5.0).abs() < 1e-3);
+        assert!((hit.normal - Vec3::Y).length() < 1e-3);
+        assert!(
+            probe
+                .probe(Vec3::new(0.0, 5.0, 0.0), Vec3::Y, 10.0)
+                .is_none()
+        );
     }
 }
 

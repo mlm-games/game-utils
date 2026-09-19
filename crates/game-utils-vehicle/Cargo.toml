@@ -12,6 +12,9 @@ categories = ["game-development", "simulation"]
 default = []
 # rapier3d scene queries as a GroundProbe source (suspension raycasts).
 rapier = ["dep:rapier3d"]
+# repame-rapier3d world as a GroundProbe source. Prefer this over `rapier`
+# for repame-sim games: no duplicate physics storage, one clock.
+repame-rapier = ["dep:repame-rapier3d"]
 
 [dependencies]
 glam = { version = "0.33", features = ["serde"] }
@@ -19,3 +22,4 @@ serde.workspace = true
 bevy_ecs = "0.19"
 repame-sim.workspace = true
 rapier3d = { version = "0.34", optional = true, default-features = false, features = ["dim3", "f32", "std", "enhanced-determinism"] }
+repame-rapier3d = { path = "../../../repame/crates/repame-rapier3d", version = "0.2", optional = true }

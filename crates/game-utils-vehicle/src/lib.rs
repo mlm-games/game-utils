@@ -51,6 +51,8 @@ pub use engine::{EngineConfig, EngineOutput, TorqueCurve};
 pub use flight::{PlaneConfig, PlaneControls, PlaneState};
 #[cfg(feature = "rapier")]
 pub use ground::rapier_backend::RapierGround;
+#[cfg(feature = "repame-rapier")]
+pub use ground::repame_backend::RepameGround;
 pub use ground::{FlatGround, GroundHit, GroundProbe, NoGround};
 pub use input::VehicleInput;
 pub use marine::{BoatConfig, BoatControls, BoatState};
