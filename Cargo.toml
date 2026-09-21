@@ -28,7 +28,7 @@ game-utils-progression = { path = "crates/game-utils-progression", version = "0.
 game-utils-quest = { path = "crates/game-utils-quest", version = "0.3.3" }
 game-utils-vehicle = { path = "crates/game-utils-vehicle", version = "0.3.3" }
 game-utils-repame = { path = "crates/game-utils-repame", version = "0.3.3" }
-repame-sim = "0.1"
-repame-fx = "0.1"
+repame-sim = "0.2"
+repame-fx = "0.2"
 bubbles-dialogue = "2"
 pathfinding = "4"
