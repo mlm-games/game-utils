@@ -108,6 +108,14 @@ fn _events() -> Vec<QuestEvent> {
     Vec::new()
 }
 
+/// A quest is satisfied the moment it starts when nothing has to be
+/// advanced: no objectives, or every objective already at `target == 0`.
+/// Such a quest can only be completed through the turn-in path, so it must
+/// be re-armed as `Completable` rather than left `Active`.
+fn trivially_satisfied(def: &QuestDef) -> bool {
+    def.objectives.iter().all(|o| o.target == 0)
+}
+
 impl QuestLog {
     pub fn new() -> Self {
         Self::default()
@@ -162,7 +170,7 @@ impl QuestLog {
             },
         );
         self.events.push(QuestEvent::Started { id: def.id.clone() });
-        if n == 0 {
+        if trivially_satisfied(def) {
             self.mark_completable(&def.id);
         }
         Ok(())
@@ -222,6 +230,7 @@ impl QuestLog {
             return None;
         }
         q.outcome = Some(outcome.into());
+        let mut rearm = false;
         self.events.push(QuestEvent::Completed {
             id: def.id.clone(),
             outcome: outcome.into(),
@@ -232,12 +241,19 @@ impl QuestLog {
             q.outcome = None;
             q.time_left = def.time_limit;
             self.events.push(QuestEvent::Started { id: def.id.clone() });
+            // A quest whose objectives are all met without any `advance` call
+            // (none at all, or all `target == 0`) would otherwise re-arm as
+            // `Active` and never become turn-in-able again.
+            rearm = trivially_satisfied(def);
         } else {
             q.stage = Stage::Completed;
             if self.tracked.as_deref() == Some(&def.id) {
                 self.tracked = None;
                 self.events.push(QuestEvent::TrackedChanged { id: None });
             }
+        }
+        if rearm {
+            self.mark_completable(&def.id);
         }
         Some(def.rewards.clone())
     }

@@ -54,7 +54,12 @@ impl BuffList {
                 cur.stacks =
                     (cur.stacks + incoming.stacks).min(cur.max_stacks.max(incoming.max_stacks));
                 cur.max_stacks = cur.max_stacks.max(incoming.max_stacks);
-                cur.duration = cur.duration.max(incoming.duration);
+                // `duration <= 0` is permanent, so it must not lose to a timer.
+                cur.duration = if cur.duration <= 0.0 || incoming.duration <= 0.0 {
+                    0.0
+                } else {
+                    cur.duration.max(incoming.duration)
+                };
                 cur.value = incoming.value;
             }
             None => self.buffs.push(incoming),

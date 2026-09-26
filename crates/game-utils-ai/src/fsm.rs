@@ -161,13 +161,19 @@ impl Fsm {
         self.stack.len()
     }
 
-    /// Advance; fires the first elapsed timed edge (event edges ignored).
+    /// Advance; fires the elapsed timed edge with the earliest deadline
+    /// (event edges ignored).
     pub fn tick(&mut self, dt: f32) {
         self.elapsed += dt.max(0.0);
         if let Some(to) = self
             .transitions
             .iter()
-            .find(|t| t.matches(&self.current) && t.after.is_some_and(|a| self.elapsed >= a))
+            .filter(|t| t.matches(&self.current) && t.after.is_some_and(|a| self.elapsed >= a))
+            .min_by(|a, b| {
+                a.after
+                    .unwrap_or(f32::INFINITY)
+                    .total_cmp(&b.after.unwrap_or(f32::INFINITY))
+            })
             .map(|t| t.to.clone())
         {
             self.enter(&to);

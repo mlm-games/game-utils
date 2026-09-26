@@ -41,7 +41,8 @@ impl Health {
     }
 
     pub fn ratio(&self) -> f32 {
-        (self.current / self.max).clamp(0.0, 1.0)
+        let max = if self.max > 0.0 { self.max } else { 1.0 };
+        (self.current / max).clamp(0.0, 1.0)
     }
 
     /// Apply post-mitigation damage. Ward charges eat whole hits.
@@ -55,7 +56,8 @@ impl Health {
             return Some(DamageResult {
                 to_shield: 0.0,
                 to_health: 0.0,
-                overkill: amount,
+                // The whole hit was ignored, so nothing was overkill.
+                overkill: 0.0,
                 killed: false,
                 warded: true,
                 saved: false,
