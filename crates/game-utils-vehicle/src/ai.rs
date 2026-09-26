@@ -203,16 +203,18 @@ impl AiOutput {
 pub fn pursue(cfg: &AiConfig, path: &Path, pos: Vec3, fwd: Vec3, speed: f32) -> Option<AiOutput> {
     let (s, closest, tangent) = path.project(pos)?;
     let to_path = closest - pos;
-    // Signed lateral error (left positive, Y-up).
+    // Signed lateral error, right-positive (matches `TrackState::lateral`).
     let lateral = to_path.cross(fwd).y;
     let look = path.point_at(s, cfg.lookahead.max(1.0))?;
     let to_look = look - pos;
     let dist = to_look.length().max(0.001);
-    // Signed angle from nose to lookahead: steer demand.
+    // Signed rotation about +Y that points the nose at the lookahead.
+    // Positive yaw about +Y turns left in this frame and `VehicleInput::steer`
+    // is right-positive, so the demand is the negated angle.
     let cross_y = fwd.cross(to_look / dist).y;
     let dot = fwd.dot(to_look / dist).clamp(-1.0, 1.0);
     let angle = cross_y.atan2(dot);
-    let steer = (angle / 0.5).clamp(-1.0, 1.0);
+    let steer = (-angle / 0.5).clamp(-1.0, 1.0);
 
     // Slowest corner within braking distance: for a corner `vc`
     // at distance `d`, the fastest we may go now is

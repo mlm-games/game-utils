@@ -260,7 +260,10 @@ impl WheelState {
             let rolling = self.spin * radius;
             let denom = vx.abs().max(rolling.abs()).max(1.0);
             self.slip_ratio = (rolling - vx) / denom;
-            self.slip_angle = (-vy / vx.abs().max(2.0)).clamp(-2.0, 2.0);
+            // Slip angle is `atan(v_lat / v_long)`: positive when the
+            // contact patch slides toward the wheel's right. `TireConfig::force`
+            // negates it, so the lateral force opposes the slide.
+            self.slip_angle = (vy / vx.abs().max(2.0)).clamp(-2.0, 2.0);
 
             // TCS: proportional scale toward the target slip, applied
             // through a rate-limited cut.

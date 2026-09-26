@@ -211,12 +211,14 @@ pub struct CarConfig {
 
 impl Default for CarConfig {
     fn default() -> Self {
-        // Four wheels: FL FR RL RR with mounts for a ~4.4 m car.
+        // Four wheels: FL FR RL RR with mounts for a ~4.4 m car. The mount
+        // height must clear the suspension stack (`rest_length + radius`)
+        // or the car spawns on its bump stops and launches itself.
         let (fl, fr, rl, rr) = (
-            Vec3::new(-0.8, 0.55, -1.4),
-            Vec3::new(0.8, 0.55, -1.4),
-            Vec3::new(-0.8, 0.55, 1.4),
-            Vec3::new(0.8, 0.55, 1.4),
+            Vec3::new(-0.8, 0.96, -1.4),
+            Vec3::new(0.8, 0.96, -1.4),
+            Vec3::new(-0.8, 0.96, 1.4),
+            Vec3::new(0.8, 0.96, 1.4),
         );
         let front_wheel = |mount: Vec3| WheelConfig {
             mount,
@@ -320,7 +322,7 @@ impl Default for CarState {
             throttle: 0.0,
             brake: 0.0,
             wheels: vec![WheelState::default(); 4],
-            center_front_split: 0.0,
+            center_front_split: 0.5,
             accel: Vec3::ZERO,
             prev_vel: Vec3::ZERO,
         }
@@ -476,15 +478,26 @@ impl CarState {
         let shaft = shaft.max(0.0) * self.clutch.engagement;
         let ratio = self.gear.ratio(&cfg.gearbox);
 
-        // Axle splits (normalized). Active center diff chases rear slip.
-        if let Some(center) = &cfg.center_diff {
+        // Axle splits (normalized). An active center diff owns the front
+        // share and splits the remainder across the remaining axles;
+        // without one the static per-axle splits are used.
+        let shares: Vec<f32> = if let Some(center) = &cfg.center_diff {
             let front_slip = axle_slip_mean(self, cfg, 0);
             let rear_slip = axle_slip_mean(self, cfg, cfg.axles.len().saturating_sub(1));
             let target = center.base_front_split
                 + (rear_slip - front_slip).clamp(-1.0, 1.0) * center.variable_range.max(0.0);
             self.center_front_split = center.update(self.center_front_split, target, dt);
-        }
-        let total_split: f32 = cfg.axles.iter().map(|a| a.torque_split.max(0.0)).sum();
+            let front = self.center_front_split.clamp(0.0, 1.0);
+            let rest = (1.0 - front) / cfg.axles.len().saturating_sub(1).max(1) as f32;
+            cfg.axles
+                .iter()
+                .enumerate()
+                .map(|(i, _)| if i == 0 { front } else { rest })
+                .collect()
+        } else {
+            cfg.axles.iter().map(|a| a.torque_split.max(0.0)).collect()
+        };
+        let total_split: f32 = shares.iter().sum();
         let norm_split = if total_split > 0.0 {
             1.0 / total_split
         } else {
@@ -517,8 +530,8 @@ impl CarState {
                 self.wheels.get(r).map_or(0.0, |w| w.spin),
             ));
         }
-        for (axle, (spin_l, spin_r)) in cfg.axles.iter().zip(axle_spins.iter()) {
-            let axle_torque = shaft * ratio * axle.torque_split.max(0.0) * norm_split;
+        for (ai, (axle, (spin_l, spin_r))) in cfg.axles.iter().zip(axle_spins.iter()).enumerate() {
+            let axle_torque = shaft * ratio * shares.get(ai).copied().unwrap_or(0.0) * norm_split;
             let (t_l, t_r) = axle.diff.split(axle_torque, *spin_l, *spin_r);
             // Torque vectoring: shift axle torque to the outer wheel
             // with steering (positive `shaped` = right = left is outer).
@@ -606,7 +619,7 @@ impl CarState {
                 total_torque += damp;
             }
             let up = self.body.up();
-            let tilt = Vec3::Y.cross(up);
+            let tilt = up.cross(Vec3::Y);
             if tilt.length() > 1e-4 {
                 let level = tilt.normalize_or_zero() * cfg.stability.upright_spring.max(0.0)
                     - self.body.ang_vel * cfg.stability.upright_damping.max(0.0);
@@ -954,32 +967,22 @@ mod tests {
         );
     }
 
-    #[test]
-    fn car_vectoring_yaws_more() {
+    /// Rear-axle outer/inner spin split after a short powered turn.
+    /// Positive means the left (outer, in a right turn) wheel leads.
+    fn rear_split(vectoring: f32, steer: f32) -> f32 {
         let mut cfg = CarConfig::default();
         for axle in &mut cfg.axles {
-            axle.vectoring = 0.6;
+            axle.vectoring = vectoring;
         }
-        let plain = CarConfig::default();
-        let mut a = CarState::new();
-        let mut b = CarState::new();
-        a.settle_suspension(&plain);
-        b.settle_suspension(&cfg);
-        // Rolling turn with drive.
+        let mut car = CarState::new();
+        car.settle_suspension(&cfg);
         let turn = VehicleInput {
             throttle: 0.6,
-            steer: 0.8,
+            steer,
             ..VehicleInput::neutral()
         };
-        for _ in 0..240 {
-            a.step(
-                &plain,
-                &turn,
-                GearShift::None,
-                &FlatGround::new(0.0),
-                1.0 / 60.0,
-            );
-            b.step(
+        for _ in 0..120 {
+            car.step(
                 &cfg,
                 &turn,
                 GearShift::None,
@@ -987,10 +990,30 @@ mod tests {
                 1.0 / 60.0,
             );
         }
-        // Vectoring car rotates more for the same input.
-        let yaw_a = (a.body.forward() - Vec3::NEG_Z).length();
-        let yaw_b = (b.body.forward() - Vec3::NEG_Z).length();
-        assert!(yaw_b > yaw_a, "vec {yaw_b} vs plain {yaw_a}");
+        car.wheels[2].spin - car.wheels[3].spin
+    }
+
+    #[test]
+    fn car_vectoring_shifts_torque_to_the_outer_wheel() {
+        // Positive steer is a right turn, so the outer wheel is the left one.
+        let right_plain = rear_split(0.0, 0.8);
+        let right_vec = rear_split(0.6, 0.8);
+        assert!(
+            right_plain > 0.0,
+            "plain right turn leads on the left wheel"
+        );
+        assert!(
+            right_vec > right_plain,
+            "vec {right_vec} vs plain {right_plain}"
+        );
+
+        let left_plain = rear_split(0.0, -0.8);
+        let left_vec = rear_split(0.6, -0.8);
+        assert!(left_plain < 0.0, "plain left turn leads on the right wheel");
+        assert!(
+            left_vec < left_plain,
+            "vec {left_vec} vs plain {left_plain}"
+        );
     }
 
     #[test]
