@@ -81,7 +81,7 @@ impl Condition {
     }
 
     pub fn repair(&mut self, amount: u32) {
-        self.current = (self.current + amount).min(self.max);
+        self.current = self.current.saturating_add(amount).min(self.max);
     }
 }
 

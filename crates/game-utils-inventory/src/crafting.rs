@@ -36,27 +36,76 @@ impl Recipe {
     }
 }
 
+/// Collapse repeated rows (`[(wood,3),(wood,3)]`) into one total per id so the
+/// check, the simulation, and the consumption all agree. Rows whose scaled qty
+/// is zero drop out, so they can neither be checked nor minted.
+fn totals(rows: &[(ItemId, u32)], times: u32) -> Vec<(ItemId, u32)> {
+    let mut out: Vec<(ItemId, u32)> = Vec::with_capacity(rows.len());
+    for (id, qty) in rows {
+        let n = qty.saturating_mul(times);
+        if n == 0 {
+            continue;
+        }
+        match out.iter_mut().find(|(existing, _)| existing == id) {
+            Some(e) => e.1 = e.1.saturating_add(n),
+            None => out.push((id.clone(), n)),
+        }
+    }
+    out
+}
+
+/// Inventory state the recipe would leave behind, or the reason it cannot.
+/// Output room is resolved by actually inserting into the simulation, so rows
+/// that compete for the same free slots are accounted for together.
+fn plan(
+    reg: &ItemRegistry,
+    inv: &SlotInventory,
+    recipe: &Recipe,
+    times: u32,
+) -> Result<Vec<(ItemId, u32)>, CraftError> {
+    let inputs = totals(&recipe.inputs, times);
+    let outputs = totals(&recipe.outputs, times);
+
+    for (id, need) in &inputs {
+        if reg.def(id).is_none() {
+            return Err(CraftError::UnknownItem(id.clone()));
+        }
+        let have = inv.count(id);
+        if have < *need {
+            return Err(CraftError::Missing {
+                id: id.clone(),
+                need: *need,
+                have,
+            });
+        }
+    }
+    for id in &outputs {
+        if reg.def(&id.0).is_none() {
+            return Err(CraftError::UnknownItem(id.0.clone()));
+        }
+    }
+
+    let mut sim = inv.clone();
+    for (id, qty) in &inputs {
+        sim.remove_all(id, *qty);
+    }
+    for (id, qty) in &outputs {
+        if sim.insert(reg, ItemStack::new(id.clone(), *qty)) > 0 {
+            return Err(CraftError::NoOutputRoom {
+                id: id.clone(),
+                qty: *qty,
+            });
+        }
+    }
+    Ok(outputs)
+}
+
 /// True when inputs are present and outputs fit (for `times` runs).
 pub fn can_craft(reg: &ItemRegistry, inv: &SlotInventory, recipe: &Recipe, times: u32) -> bool {
     if times == 0 {
         return true;
     }
-    for (id, qty) in &recipe.inputs {
-        if reg.def(id).is_none() || inv.count(id) < qty.saturating_mul(times) {
-            return false;
-        }
-    }
-    // Simulate consumption, then check output room.
-    let mut sim = inv.clone();
-    for (id, qty) in &recipe.inputs {
-        sim.remove_all(id, qty.saturating_mul(times));
-    }
-    for (id, qty) in &recipe.outputs {
-        if reg.def(id).is_none() || sim.count_free(reg, id) < qty.saturating_mul(times) {
-            return false;
-        }
-    }
-    true
+    plan(reg, inv, recipe, times).is_ok()
 }
 
 /// Run `times` crafts atomically. Returns Err without mutating on failure.
@@ -69,44 +118,18 @@ pub fn craft(
     if times == 0 {
         return Ok(());
     }
-    for (id, qty) in &recipe.inputs {
-        if reg.def(id).is_none() {
-            return Err(CraftError::UnknownItem(id.clone()));
-        }
-        let have = inv.count(id);
-        if have < qty.saturating_mul(times) {
-            return Err(CraftError::Missing {
-                id: id.clone(),
-                need: qty.saturating_mul(times),
-                have,
-            });
-        }
+    let outputs = plan(reg, inv, recipe, times)?;
+    let inputs = totals(&recipe.inputs, times);
+
+    for (id, qty) in &inputs {
+        inv.remove_all(id, *qty);
     }
-    // Output room after simulated consumption.
-    let mut sim = inv.clone();
-    for (id, qty) in &recipe.inputs {
-        sim.remove_all(id, qty.saturating_mul(times));
-    }
-    for (id, qty) in &recipe.outputs {
-        let Some(_) = reg.def(id) else {
-            return Err(CraftError::UnknownItem(id.clone()));
-        };
-        if sim.count_free(reg, id) < qty.saturating_mul(times) {
-            return Err(CraftError::NoOutputRoom {
-                id: id.clone(),
-                qty: qty.saturating_mul(times),
-            });
-        }
-    }
-    for (id, qty) in &recipe.inputs {
-        inv.remove_all(id, qty.saturating_mul(times));
-    }
-    for (id, qty) in &recipe.outputs {
-        let left = inv.insert(reg, ItemStack::new(id.clone(), qty.saturating_mul(times)));
+    for (id, qty) in &outputs {
+        let left = inv.insert(reg, ItemStack::new(id.clone(), *qty));
         debug_assert_eq!(left, 0);
         inv.record(InventoryEvent::Crafted {
             id: id.clone(),
-            qty: qty.saturating_mul(times),
+            qty: *qty,
         });
     }
     Ok(())
