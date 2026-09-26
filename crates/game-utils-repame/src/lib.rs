@@ -35,10 +35,10 @@ pub mod save;
 pub mod sim_time;
 
 pub use feel::{CameraLimits, Recoil, apply_limits, knockback, smooth_toward};
-pub use i18n::{I18nStrings, register_i18n};
-pub use loading::{LoadingResource, register_loading};
 /// Engine-agnostic counter (core): `Res<LoadingResource>` derefs to it.
 pub use game_utils::loading::LoadingProgress;
+pub use i18n::{I18nStrings, register_i18n};
+pub use loading::{LoadingResource, register_loading};
 pub use pooling::{DEFAULT_MAX_SIZE, EntityPool, ObjectPool, PoolHidden, scrub_dead};
 pub use save::{SaveResource, SaveResult, register_save};
 pub use sim_time::{FeelIntensity, HitStop, SlowMotion, TimeScaleControl};
