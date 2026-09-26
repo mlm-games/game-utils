@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 /// 2D layout slot for one held item: position relative to the hand
 /// anchor (usually its center), rotation in degrees, uniform scale.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Transform2d {
     pub position: Vec2,
     pub rotation_deg: f32,
@@ -17,6 +17,13 @@ impl Transform2d {
             rotation_deg: 0.0,
             scale: 1.0,
         }
+    }
+}
+
+impl Default for Transform2d {
+    /// Identity, not the derived zero scale: a zero-scaled item is invisible.
+    fn default() -> Self {
+        Self::identity()
     }
 }
 
@@ -95,7 +102,9 @@ impl HandLayout for FanLayout {
         } else {
             count
         };
-        let step = if count <= capacity.max(1) {
+        // A non-positive `step_deg` has no capacity, so fall through to the
+        // spread branch instead of collapsing every card onto one point.
+        let step = if self.step_deg > 0.0 && count <= capacity {
             self.step_deg
         } else {
             self.spread_deg / (count as f32 - 1.0).max(1.0)

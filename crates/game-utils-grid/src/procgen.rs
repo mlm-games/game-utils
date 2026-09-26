@@ -121,6 +121,9 @@ pub fn tunnel_walk(
     set_to: bool,
 ) -> GridPos {
     grid.set(from, set_to);
+    if grid.w == 0 || grid.h == 0 {
+        return from;
+    }
     for _ in 0..steps {
         let (dx, dy) = crate::pos::DIRS8[rng.random_range(0..crate::pos::DIRS8.len())];
         from = GridPos::new(

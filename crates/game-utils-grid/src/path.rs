@@ -154,8 +154,15 @@ pub fn astar_adjacent(
         p.windows(2).map(|w| step_cost(w[0], w[1]).max(0.0)).sum()
     }
     let mut best: Option<(Vec<GridPos>, f32)> = None;
+    let mut start_is_adjacent = false;
     for n in goal.neighbors8() {
-        if n == start || !passable(n) {
+        if !passable(n) {
+            continue;
+        }
+        // The caller already standing on an adjacent cell is only a
+        // last resort: prefer a real approach from a different neighbor.
+        if n == start {
+            start_is_adjacent = true;
             continue;
         }
         if let Some(p) = astar(start, n, passable, step_cost, cfg) {
@@ -165,7 +172,11 @@ pub fn astar_adjacent(
             }
         }
     }
-    best.map(|(p, _)| p)
+    match best {
+        Some((p, _)) => Some(p),
+        None if start_is_adjacent => Some(vec![start]),
+        None => None,
+    }
 }
 
 /// Flood fill from `start` up to `max_depth` steps. Maps cell -> depth.

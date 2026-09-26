@@ -88,6 +88,7 @@ pub type EnergyPool = ResourcePool;
 
 impl ResourcePool {
     pub fn new(max: i32) -> Self {
+        let max = max.max(0);
         Self { current: max, max }
     }
 

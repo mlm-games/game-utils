@@ -84,13 +84,21 @@ impl<P> Registry<P> {
     }
 
     /// Roll up to `count` distinct filtered offers. Caller gives RNG.
+    /// The candidate pool is ordered by id first, so a given seed yields
+    /// the same offers across processes (`HashMap` iteration order does not).
     pub fn offers<R: Rng + ?Sized>(
         &self,
         rng: &mut R,
         count: usize,
         mut filter: impl FnMut(&CardDef<P>) -> bool,
     ) -> Vec<CardId> {
-        let mut pool: Vec<&CardDef<P>> = self.defs.values().filter(|d| filter(d)).collect();
+        let mut pool: Vec<&CardDef<P>> = self
+            .defs
+            .iter()
+            .filter(|(_, d)| filter(d))
+            .map(|(_, d)| d)
+            .collect();
+        pool.sort_by(|a, b| a.id.0.cmp(&b.id.0));
         let mut out = Vec::new();
         // Partial Fisher-Yates: only shuffle as far as needed.
         let n = count.min(pool.len());

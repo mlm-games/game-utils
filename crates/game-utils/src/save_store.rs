@@ -112,7 +112,9 @@ impl<S: Storage> SaveStore<S> {
                     || *b == b'E'
                     || *b == b'+'
             });
-        if !plausible {}
+        if !plausible {
+            return false;
+        }
         serde_json::from_slice::<serde_json::Value>(trimmed).is_ok()
     }
 
