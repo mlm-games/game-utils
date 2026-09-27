@@ -7,7 +7,6 @@ description = "Repame (repose stack) game-feel utilities: sim time scales, hitst
 repository.workspace = true
 keywords = ["repame", "repose", "gamedev", "game-feel", "sim"]
 categories = ["game-development"]
-publish = false
 
 [dependencies]
 game-utils.workspace = true
