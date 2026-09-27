@@ -1016,6 +1016,65 @@ mod tests {
         );
     }
 
+    /// Peak absolute yaw rate (rad/s) over a sustained powered turn.
+    fn peak_yaw_rate(vectoring: f32) -> f32 {
+        let mut cfg = CarConfig::default();
+        for axle in &mut cfg.axles {
+            axle.vectoring = vectoring;
+        }
+        let mut car = CarState::new();
+        car.settle_suspension(&cfg);
+        let turn = VehicleInput {
+            throttle: 0.6,
+            steer: 0.8,
+            ..VehicleInput::neutral()
+        };
+        let mut peak = 0.0f32;
+        for _ in 0..240 {
+            car.step(
+                &cfg,
+                &turn,
+                GearShift::None,
+                &FlatGround::new(0.0),
+                1.0 / 60.0,
+            );
+            peak = peak.max((car.body.orient.inverse() * car.body.ang_vel).y.abs());
+        }
+        peak
+    }
+
+    #[test]
+    fn car_does_not_spin_out_under_power_and_steer() {
+        // Golden stability bound. Tire forces must oppose slip: with the
+        // lateral sign flipped the car reaches ~5.5 rad/s (a full spin every
+        // second) at *every* vectoring setting, including the default 0.0.
+        for v in [0.0f32, 0.3, 0.6, 1.0] {
+            let peak = peak_yaw_rate(v);
+            assert!(peak < 2.0, "vec={v} spun out: {peak} rad/s");
+        }
+    }
+
+    #[test]
+    fn car_yaw_disturbance_decays() {
+        // No restoring authority at low speed would leave a yaw rate stuck.
+        let cfg = CarConfig::default();
+        let mut car = CarState::new();
+        car.settle_suspension(&cfg);
+        car.body.vel = Vec3::NEG_Z * 3.0;
+        car.body.ang_vel = Vec3::Y * 3.0;
+        for _ in 0..240 {
+            car.step(
+                &cfg,
+                &VehicleInput::neutral(),
+                GearShift::None,
+                &FlatGround::new(0.0),
+                1.0 / 60.0,
+            );
+        }
+        let yaw = (car.body.orient.inverse() * car.body.ang_vel).y;
+        assert!(yaw.abs() < 0.5, "yaw rate stuck at {yaw} rad/s");
+    }
+
     #[test]
     fn car_manual_reverse() {
         let mut cfg = CarConfig::default();
