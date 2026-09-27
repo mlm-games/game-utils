@@ -22,4 +22,4 @@ serde.workspace = true
 bevy_ecs = "0.19"
 repame-sim.workspace = true
 rapier3d = { version = "0.34", optional = true, default-features = false, features = ["dim3", "f32", "std", "enhanced-determinism"] }
-repame-rapier3d = { path = "../../../repame/crates/repame-rapier3d", version = "0.2", optional = true }
+repame-rapier3d = { version = "0.3", optional = true }
