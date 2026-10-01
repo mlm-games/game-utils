@@ -617,7 +617,7 @@ dependencies = [
 
 [[package]]
 name = "game-utils"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "directories",
  "fluent-bundle",
@@ -643,7 +643,7 @@ dependencies = [
 
 [[package]]
 name = "game-utils-ai"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "glam 0.33.11",
  "pathfinding",
@@ -653,7 +653,7 @@ dependencies = [
 
 [[package]]
 name = "game-utils-cards"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "glam 0.33.11",
  "rand",
@@ -663,7 +663,7 @@ dependencies = [
 
 [[package]]
 name = "game-utils-combat"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "glam 0.33.11",
  "rand",
@@ -672,7 +672,7 @@ dependencies = [
 
 [[package]]
 name = "game-utils-grid"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "rand",
  "serde",
@@ -680,7 +680,7 @@ dependencies = [
 
 [[package]]
 name = "game-utils-inventory"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "game-utils-grid",
  "serde",
@@ -689,7 +689,7 @@ dependencies = [
 
 [[package]]
 name = "game-utils-progression"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "rand",
  "serde",
@@ -697,7 +697,7 @@ dependencies = [
 
 [[package]]
 name = "game-utils-quest"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "bubbles-dialogue",
  "serde",
@@ -705,7 +705,7 @@ dependencies = [
 
 [[package]]
 name = "game-utils-repame"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "bevy_ecs",
  "game-utils",
@@ -717,7 +717,7 @@ dependencies = [
 
 [[package]]
 name = "game-utils-vehicle"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "bevy_ecs",
  "glam 0.33.11",

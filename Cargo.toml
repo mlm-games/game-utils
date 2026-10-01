@@ -3,7 +3,7 @@ members = ["crates/*"]
 resolver = "3"
 
 [workspace.package]
-version = "0.4.0"
+version = "0.4.1"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/mlm-games/game-utils"
@@ -19,15 +19,15 @@ unic-langid = "0.9"
 fluent-bundle = "0.16"
 rand = "0.10"
 web-time = "1.1"
-game-utils = { path = "crates/game-utils", version = "0.4.0" }
-game-utils-ai = { path = "crates/game-utils-ai", version = "0.4.0" }
-game-utils-combat = { path = "crates/game-utils-combat", version = "0.4.0" }
-game-utils-grid = { path = "crates/game-utils-grid", version = "0.4.0" }
-game-utils-inventory = { path = "crates/game-utils-inventory", version = "0.4.0" }
-game-utils-progression = { path = "crates/game-utils-progression", version = "0.4.0" }
-game-utils-quest = { path = "crates/game-utils-quest", version = "0.4.0" }
-game-utils-vehicle = { path = "crates/game-utils-vehicle", version = "0.4.0" }
-game-utils-repame = { path = "crates/game-utils-repame", version = "0.4.0" }
+game-utils = { path = "crates/game-utils", version = "0.4.1" }
+game-utils-ai = { path = "crates/game-utils-ai", version = "0.4.1" }
+game-utils-combat = { path = "crates/game-utils-combat", version = "0.4.1" }
+game-utils-grid = { path = "crates/game-utils-grid", version = "0.4.1" }
+game-utils-inventory = { path = "crates/game-utils-inventory", version = "0.4.1" }
+game-utils-progression = { path = "crates/game-utils-progression", version = "0.4.1" }
+game-utils-quest = { path = "crates/game-utils-quest", version = "0.4.1" }
+game-utils-vehicle = { path = "crates/game-utils-vehicle", version = "0.4.1" }
+game-utils-repame = { path = "crates/game-utils-repame", version = "0.4.1" }
 repame-sim = "0.3"
 repame-fx = "0.3"
 bubbles-dialogue = "2"
