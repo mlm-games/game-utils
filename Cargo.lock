@@ -710,7 +710,7 @@ dependencies = [
  "bevy_ecs",
  "game-utils",
  "glam 0.33.7",
- "repame-sim 0.2.1",
+ "repame-sim",
  "serde",
  "web-time",
 ]
@@ -723,7 +723,7 @@ dependencies = [
  "glam 0.33.7",
  "rapier3d",
  "repame-rapier3d",
- "repame-sim 0.2.1",
+ "repame-sim",
  "serde",
 ]
 
@@ -1307,26 +1307,14 @@ dependencies = [
  "glam 0.33.7",
  "log",
  "rapier3d",
- "repame-sim 0.3.0",
+ "repame-sim",
 ]
 
 [[package]]
 name = "repame-sim"
-version = "0.2.1"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28beccaba25050b9999eae07c18bc8c038ea237715c4627501b9650e5fb46262"
-dependencies = [
- "bevy_ecs",
- "glam 0.33.7",
- "log",
- "web-time",
-]
-
-[[package]]
-name = "repame-sim"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be77ac78ca15b7328918966bb2c61ddffca4d3457da624b90dfb9a581901f84b"
+checksum = "ad5f85f7d0ef0577dbf6849d20aabcb00307997ae2f6de992a5482b0e09fd99f"
 dependencies = [
  "bevy_ecs",
  "glam 0.33.7",
