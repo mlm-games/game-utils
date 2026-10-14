@@ -64,7 +64,7 @@ bevy_sprite = { version = "0.20" }
 bevy_state = { version = "0.20" }
 bevy_text = { version = "0.20" }
 bevy_ui = { version = "0.20" }
-game-utils = { path = "crates/game-utils", version = "0.3.3" }
+game-utils = { version = "0.4" }
 game-utils-ai = { path = "crates/game-utils-ai", version = "0.3.3" }
 game-utils-combat = { path = "crates/game-utils-combat", version = "0.3.3" }
 game-utils-grid = { path = "crates/game-utils-grid", version = "0.3.3" }

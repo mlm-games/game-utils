@@ -1,13 +1,12 @@
 [package]
 name = "game-utils-bevy"
-version.workspace = true
+version = "0.4.0"
 edition.workspace = true
 license.workspace = true
 description = "Bevy game-feel utilities (juice, screen effects, transitions, vfx, pooled audio, entity pooling) with bevy and repose wgpu post-process backends"
 repository.workspace = true
 keywords = ["bevy", "gamedev", "game-feel", "juice", "vfx"]
 categories = ["game-development"]
-publish = false
 
 [dependencies]
 game-utils.workspace = true

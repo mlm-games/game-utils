@@ -2377,6 +2377,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "game-utils"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1da9663e8a7e5fbcd04018ee34deb0a72d1f9bfabb77738904bb5a2fcae6000"
+dependencies = [
+ "directories",
+ "fluent-bundle",
+ "getrandom 0.4.3",
+ "glam 0.33.7",
+ "js-sys",
+ "rand",
+ "ron",
+ "ropfs",
+ "serde",
+ "serde_json",
+ "unic-langid",
+ "wasm-bindgen",
+ "web-sys",
+ "web-time",
+]
+
+[[package]]
 name = "game-utils-ai"
 version = "0.3.3"
 dependencies = [
@@ -2388,7 +2410,7 @@ dependencies = [
 
 [[package]]
 name = "game-utils-bevy"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "bevy_app",
  "bevy_asset",
@@ -2410,7 +2432,7 @@ dependencies = [
  "bevy_transform",
  "bevy_ui",
  "bytemuck",
- "game-utils",
+ "game-utils 0.4.1",
  "rand",
  "repose-core",
  "repose-render-wgpu",
@@ -2476,7 +2498,7 @@ name = "game-utils-repame"
 version = "0.3.3"
 dependencies = [
  "bevy_ecs 0.19.1",
- "game-utils",
+ "game-utils 0.4.1",
  "glam 0.33.7",
  "repame-sim",
  "serde",
