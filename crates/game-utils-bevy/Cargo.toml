@@ -20,6 +20,7 @@ bevy_audio.workspace = true
 bevy_camera.workspace = true
 bevy_color.workspace = true
 bevy_core_pipeline = { workspace = true, optional = true }
+bevy_extract = { workspace = true, optional = true }
 bevy_ecs.workspace = true
 bevy_input.workspace = true
 bevy_log.workspace = true
@@ -45,7 +46,7 @@ transitions = []
 screen_effects = []
 pooling = []
 time_scale = []
-render = ["dep:bevy_render", "dep:bevy_core_pipeline"]
+render = ["dep:bevy_render", "dep:bevy_core_pipeline", "dep:bevy_extract"]
 # Fullscreen flash + circle-wipe overlay as a repose WgpuCallback.
 repose = ["dep:repose-core", "dep:repose-render-wgpu", "dep:wgpu", "dep:bytemuck"]
 full = ["audio", "transitions", "screen_effects", "pooling", "time_scale", "render", "repose"]
