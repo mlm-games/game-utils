@@ -1,12 +1,15 @@
-# game-utils
+# game-utils-bevy
 
-Reusable game utility crates extracted from the [`my-ecosystem-bevy`](https://github.com/mlm-games/my-ecosystem-template-bevy) template.
+Bevy plugins extracted from the [`my-ecosystem-bevy`](https://github.com/mlm-games/my-ecosystem-template-bevy) template.
 
-The workspace is split into two crates so the generic pieces can be used without pulling in Bevy:
+Audio channels + pooled positional SFX with per-frame collapse + music fade, game feel, juice, vfx,
+screen effects (2D + 3D), post-processing, transitions, UI effects, entity pooling.
+
+The Bevy-agnostic half of these utilities ([`game-utils`](https://crates.io/crates/game-utils))
+lives on the `master` branch; this branch is the Bevy-facing half and is published on its own.
 
 | Crate | Description |
 | --- | --- |
-| [`game-utils`](crates/game-utils/) | Bevy-agnostic: math helpers (`glam`), generic save manager (RON + platform data dir), crash-safe save store (atomic temp+rename writes, `.bak` rotation, corruption quarantine), weighted random / stable sampling, stats aggregation + unlock conditions, achievement registry, i18n (Fluent), multi-profile manager, discovery/codex ledger |
 | [`game-utils-bevy`](crates/game-utils-bevy/) | Bevy plugins: audio channels + pooled positional SFX with per-frame collapse + music fade, game feel, juice, vfx, screen effects (2D + 3D), post-processing, transitions, UI effects, entity pooling |
 
 ## game-utils (bevy-agnostic)

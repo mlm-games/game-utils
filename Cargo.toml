@@ -1,79 +1,38 @@
 [workspace]
-members = ["crates/*"]
+members = ["crates/game-utils-bevy"]
 resolver = "3"
 
 [workspace.package]
-version = "0.3.3"
+version = "0.4.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/mlm-games/game-utils"
 rust-version = "1.98"
 
 [workspace.dependencies]
-glam = "0.33"
+game-utils = { version = "0.4" }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-ron = "0.12"
-directories = "6"
-unic-langid = "0.9"
-fluent-bundle = "0.16"
 rand = "0.10"
 web-time = "1.1"
-bevy = { version = "0.20", default-features = false, features = [
-    "bevy_asset",
-    "bevy_audio",
-    "bevy_camera",
-    "bevy_color",
-    "bevy_log",
-    "bevy_shader",
-    "bevy_sprite",
-    "bevy_state",
-    "bevy_text",
-    "bevy_ui",
-    "bevy_window",
-    "reflect_auto_register",
-    "keyboard",
-    "mouse",
-    "gamepad",
-    "std",
-    "async_executor",
-] }
-# NOTE: `bevy_render` / `bevy_core_pipeline` (the wgpu backend) are intentionally
-# NOT in the base list above, so default builds stay wgpu-free and can coexist
-# with other wgpu versions (e.g. ../repose pins wgpu 30 directly).
-# They are enabled opt-in via `game-utils-bevy/render`
-# (`bevy/bevy_render`, `bevy/bevy_core_pipeline`).
-# Wgpu-free granular deps (same bevy rev) for crates that must not pull wgpu.
-bevy_ecs = { version = "0.20" }
+
+# Bevy is consumed as individual sub-crates rather than the facade, so a game can
+# pick exactly what it pulls in. `render` is the only feature that reaches wgpu.
 bevy_app = { version = "0.20" }
-bevy_time = { version = "0.20" }
-bevy_math = { version = "0.20" }
-bevy_transform = { version = "0.20" }
-# render-gated modules pull wgpu only via `render`.
 bevy_asset = { version = "0.20" }
 bevy_audio = { version = "0.20" }
 bevy_camera = { version = "0.20" }
 bevy_color = { version = "0.20" }
 bevy_core_pipeline = { version = "0.20" }
+bevy_ecs = { version = "0.20" }
+bevy_extract = { version = "0.20" }
 bevy_input = { version = "0.20" }
 bevy_log = { version = "0.20" }
-bevy_extract = { version = "0.20" }
+bevy_math = { version = "0.20" }
 bevy_render = { version = "0.20" }
 bevy_shader = { version = "0.20" }
 bevy_sprite = { version = "0.20" }
 bevy_state = { version = "0.20" }
 bevy_text = { version = "0.20" }
+bevy_time = { version = "0.20" }
+bevy_transform = { version = "0.20" }
 bevy_ui = { version = "0.20" }
-game-utils = { version = "0.4" }
-game-utils-ai = { path = "crates/game-utils-ai", version = "0.3.3" }
-game-utils-combat = { path = "crates/game-utils-combat", version = "0.3.3" }
-game-utils-grid = { path = "crates/game-utils-grid", version = "0.3.3" }
-game-utils-inventory = { path = "crates/game-utils-inventory", version = "0.3.3" }
-game-utils-progression = { path = "crates/game-utils-progression", version = "0.3.3" }
-game-utils-quest = { path = "crates/game-utils-quest", version = "0.3.3" }
-game-utils-vehicle = { path = "crates/game-utils-vehicle", version = "0.3.3" }
-game-utils-repame = { path = "crates/game-utils-repame", version = "0.3.3" }
-repame-sim = "0.1"
-repame-fx = "0.1"
-bubbles-dialogue = "2"
-pathfinding = "4"
