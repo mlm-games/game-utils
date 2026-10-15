@@ -151,6 +151,33 @@ impl<S: Storage> SaveStore<S> {
         }
     }
 
+    /// `std::process::id` panics on wasm, which would abort the very recovery
+    /// path a quarantine exists for. The nanosecond stamp plus the collision
+    /// counter below already keep names unique, so a constant is enough there.
+    fn process_id() -> u32 {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            std::process::id()
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            0
+        }
+    }
+
+    /// Clear a corrupt file out of the way before writing over it: quarantined
+    /// under a timestamped name when [`Self::quarantine_corrupt`] is set,
+    /// deleted otherwise. Callers must route every corrupt-file removal through
+    /// here so the flag actually governs.
+    fn set_aside_corrupt_file(&self, path: &Path) -> PathBuf {
+        if self.quarantine_corrupt {
+            return self.quarantine_corrupt_file(path);
+        }
+        let _ = self.storage.remove_file(path);
+        self.storage.sync_dir(&self.dir);
+        path.to_path_buf()
+    }
+
     /// Move a corrupt save aside under a timestamped name. Uses nanos + pid + counter
     /// to avoid second-granularity collisions that silently overwrote earlier quarantines.
     pub fn quarantine_corrupt_file(&self, path: &Path) -> PathBuf {
@@ -161,7 +188,7 @@ impl<S: Storage> SaveStore<S> {
         let base = format!(
             "corrupted_{}_{}_{}",
             Self::now_nanos(),
-            std::process::id(),
+            Self::process_id(),
             name
         );
         let mut dest = self.dir.join(&base);
@@ -171,7 +198,7 @@ impl<S: Storage> SaveStore<S> {
             dest = self.dir.join(format!(
                 "corrupted_{}_{}_{}_{}",
                 Self::now_nanos(),
-                std::process::id(),
+                Self::process_id(),
                 name,
                 counter
             ));
@@ -209,7 +236,7 @@ impl<S: Storage> SaveStore<S> {
                 .flatten()
                 .is_some_and(|b| (self.validate)(&b));
             if !temp_ok {
-                self.quarantine_corrupt_file(&temp_path);
+                self.set_aside_corrupt_file(&temp_path);
             } else {
                 let target_ok = self
                     .storage
@@ -220,7 +247,7 @@ impl<S: Storage> SaveStore<S> {
                 if target_ok {
                     let _ = self.storage.remove_file(&temp_path);
                 } else if self.storage.rename(&temp_path, &target_path).is_err() {
-                    self.quarantine_corrupt_file(&temp_path);
+                    self.set_aside_corrupt_file(&temp_path);
                 } else {
                     self.storage.sync_dir(&self.dir);
                 }
@@ -241,7 +268,7 @@ impl<S: Storage> SaveStore<S> {
                 .flatten()
                 .is_some_and(|b| (self.validate)(&b));
             if !target_intact {
-                self.quarantine_corrupt_file(&target_path);
+                self.set_aside_corrupt_file(&target_path);
             } else if self.should_rotate_bak(&bak_path) {
                 if self.storage.rename(&target_path, &bak_path).is_err() {
                     let _ = self.storage.remove_file(&bak_path);
@@ -321,9 +348,7 @@ impl<S: Storage> SaveStore<S> {
                 };
             }
             Ok(Some(_)) => {
-                if self.quarantine_corrupt {
-                    self.quarantine_corrupt_file(&target_path);
-                }
+                self.set_aside_corrupt_file(&target_path);
                 LoadStatus::Corrupt
             }
         };
