@@ -1,4 +1,8 @@
-#import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput
+// bevy only preprocesses imports in .wesl, so .wgsl cannot #import this struct
+struct FullscreenVertexOutput {
+    @builtin(position) position: vec4<f32>,
+    @location(0) uv: vec2<f32>,
+};
 
 struct ScreenEffectSettings {
     chromatic_intensity: f32,
