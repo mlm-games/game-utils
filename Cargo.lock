@@ -1303,9 +1303,9 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "repame-rapier3d"
-version = "0.3.15"
+version = "0.3.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "afd2fc2c3beca4b1f99008dcdb24210819e6017b2275c7773bdc9e293a4ccdee"
+checksum = "013da99c3ac3d49a4f12251538fc1b2c3bb90a23664ab6041b3861d435097e3e"
 dependencies = [
  "bevy_ecs",
  "glam 0.33.12",
@@ -1316,9 +1316,9 @@ dependencies = [
 
 [[package]]
 name = "repame-sim"
-version = "0.3.16"
+version = "0.3.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a39651fc556d7cc1ac084fe019081d640d29c2d9e1f975fbaad2862a7882467a"
+checksum = "3245a40dd109358e740e3af2c3dccdfe6fd0ac2a6f3c0ee1c0fe390ba484b6f3"
 dependencies = [
  "bevy_ecs",
  "glam 0.33.12",
