@@ -17,9 +17,9 @@ rapier = ["dep:rapier3d"]
 repame-rapier = ["dep:repame-rapier3d"]
 
 [dependencies]
-glam = { version = "0.33", features = ["serde"] }
+glam.workspace = true
 serde.workspace = true
-bevy_ecs = "0.20"
+bevy_ecs.workspace = true
 repame-sim.workspace = true
 rapier3d = { version = "0.34", optional = true, default-features = false, features = ["dim3", "f32", "std", "enhanced-determinism"] }
 repame-rapier3d = { version = "0.3", optional = true }

@@ -11,5 +11,5 @@ categories = ["game-development"]
 [dependencies]
 serde.workspace = true
 rand.workspace = true
-glam = { version = "0.33", features = ["serde"] }
+glam.workspace = true
 ron.workspace = true

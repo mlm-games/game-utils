@@ -10,7 +10,8 @@ repository = "https://github.com/mlm-games/game-utils"
 rust-version = "1.98"
 
 [workspace.dependencies]
-glam = "0.33"
+glam = { version = "0.33", features = ["serde"] }
+bevy_ecs = "0.20"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 ron = "0.12"

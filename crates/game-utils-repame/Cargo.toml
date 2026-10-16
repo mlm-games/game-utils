@@ -10,7 +10,7 @@ categories = ["game-development"]
 
 [dependencies]
 game-utils.workspace = true
-bevy_ecs = "0.20"
+bevy_ecs.workspace = true
 repame-sim.workspace = true
 glam.workspace = true
 serde.workspace = true
